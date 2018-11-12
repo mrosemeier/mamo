@@ -526,6 +526,50 @@ class MaterialDTU10MWTestCase(unittest.TestCase):
 
         np.asarray(eMsmaxs)
 
+    def test_stress_recovery_thermal(self):
+        pl = Plate(width=0.)
+
+        pl.materials['uniax'] = self.uniax
+        pl.materials['biax'] = self.biax
+        pl.materials['triax'] = self.triax
+
+        pl.s = [0]
+        pl.init_regions(1)
+
+        # add materials to regions layup
+        r = pl.regions['region00']
+        l = r.add_layer('triax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('uniax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('uniax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('triax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+
+        pl.init_layup(ridx=0, sidx=0)
+
+        dT = 60.
+        eps_laminate = pl.laminate.apply_load(F=0., dT=dT)
+
+        eMsmaxs = []
+        for k, v in pl.regions['region00'].layers.iteritems():
+            matname = k[:-2]
+            matobj = pl.materials[matname]
+            _sMes, _eMs = matobj.recover_laminate_stresses(eps_laminate)
+            matobj_thicks = matobj.pl.regions['region00'].thick_matrix[0]
+            bool = matobj_thicks / matobj_thicks
+            sMes, eMs = _sMes * bool, _eMs * bool
+
+            eMsmax = np.nanmax(eMs)
+            eMsmaxs.append(eMsmax)
+
+        np.asarray(eMsmaxs)
+
 
 if __name__ == "__main__":
     unittest.main()

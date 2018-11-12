@@ -381,12 +381,12 @@ class CompositeCFMh(object):
 
         def min_func(f):
             F = f * elaminate_target / (elaminate_target + EPS)
-            eps = self.pl.laminate.apply_load(F)
+            eps = self.pl.laminate.apply_load(F, dT=0.)
             return abs(np.max(abs(elaminate_target)) - np.max(abs(eps)))
         f = optimize.brent(min_func)
 
         F = f * elaminate_target / (elaminate_target + EPS)
-        elaminate = self.pl.laminate.apply_load(F)
+        elaminate = self.pl.laminate.apply_load(F, dT=0.)
 
         #sMs = np.zeros(len(self.pl.laminate.plies))
         sMes = np.zeros(len(self.pl.laminate.plies))

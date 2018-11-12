@@ -2,6 +2,7 @@ import numpy as np
 import unittest
 from fusedwind.turbine.layup import Material
 from mamo.models.cfmh import CompositeCFMh
+from pasta.plate import Plate
 
 
 cfrp_ET = np.array([3.09000000e+09,   3.62312781e+09,   3.89422723e+09,
@@ -216,6 +217,294 @@ class MaterialResistanceTestCase(unittest.TestCase):
         eMsmax = np.max(eMs)
         self.assertEqual(
             np.testing.assert_allclose(eMsmax, 1.0, 1E-6), None)
+
+
+class MaterialDTU10MWTestCase(unittest.TestCase):
+
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+
+        # DTU Wind Energy Report-I-0092
+        # [23] M. Hinton, P. Soden, and Abdul-Salam Kaddour. Failure Criteria in Fibre-Reinforced-Polymer Composites. D Elsevier, 2004.
+
+        self.epoxy_resin = Material()
+        self.epoxy_resin.set_props_iso(E1=4.0E+09,
+                                       nu12=0.35,
+                                       rho=1.140E+03)
+        self.epoxy_resin.s11_t = 73.49E+6
+
+        self.eglass = Material()
+        self.eglass.set_props_iso(E1=75.0E+09,
+                                  nu12=0.2,
+                                  rho=2.550E+03)
+
+        self.balsa = Material()
+        self.balsa.set_props(E1=0.05E+09,
+                             E2=0.05E+09,
+                             E3=2.73E+09,
+                             nu12=0.5,
+                             nu13=0.013,
+                             nu23=0.013,
+                             G12=0.0167E+09,
+                             G13=0.150E+09,
+                             G23=0.150E+09,
+                             rho=110.)
+
+        self.pes = Material()
+        self.pes.set_props_iso(E1=1.5E+10,
+                               nu12=0.28,
+                               rho=1370.0)
+
+    def tearDown(self):
+        pass
+
+    def test_dtu10mw_materials(self):
+
+        # create uniax lamina and laminate
+        uniax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
+        # lamina properties
+        uniax.lamina_properties(fvf=0.55)
+
+        uniax.E1
+        uniax.E2
+        uniax.E3
+        uniax.G12
+        uniax.G23
+        uniax.G13
+        uniax.nu12
+
+        '''
+        >>> uniax.E1
+        43430462367.72995
+        >>> uniax.E2
+        12836380388.803102
+        >>> uniax.E3
+        12836380388.803102
+        >>> uniax.G12
+        4654078663.4492397
+        >>> uniax.G23
+        4404344624.5562649
+        >>> uniax.G13
+        4654078663.4492397
+        >>> uniax.nu12
+        0.26749999999999996
+        '''
+
+        # total mass per area of fabric (fibers incl sizing)
+        mA_F = 1.2
+        # mass per area of fabric's laminae
+        mA_Fs = np.array([.95, .05]) * mA_F
+        # angles of fabric's laminae
+        angles = np.array([0.0, 90.0])
+        # thicknesses of fabric's laminae
+        t_F = mA_Fs / (uniax.f.rho * uniax.fvf)
+
+        with_stitching_thread = False
+        if with_stitching_thread:
+            # mass per area of stitching thread
+            mA_T = 0.012
+            # thickness of stitching thread lamina
+            t_T = mA_T / (self.pes.rho * uniax.fvf)
+        else:
+            t_T = 0.
+
+        with_sizing = False
+        if with_sizing:
+            # fiber mass fraction
+            psi_F = 0.7151
+            # sizing mass fraction of fibers
+            psi_SF = 0.0055
+            # sizing mass fraction
+            psi_S = psi_SF * mA_F
+            # glass mass fraction
+            psi_Gl = (1 - psi_SF) * mA_F
+            # density of sizing
+            rho_S = 1150.0
+            # density of glass
+            rho_Gl = uniax.f.rho
+            # density of fabric
+            rho_F = psi_F / (psi_Gl / rho_Gl + psi_S / rho_S)
+        else:
+            rho_F = uniax.f.rho
+        # set fabric density
+        uniax.rho_F = rho_F
+
+        # laminate properties
+        uniax.laminate_properties(thicknesses=t_F,
+                                  angles=angles,
+                                  stitch=self.pes,
+                                  t_T=t_T)
+
+        uniax.pl.laminate.e1
+        uniax.pl.laminate.e2
+        uniax.pl.laminate.g12
+        uniax.pl.laminate.nu12
+        '''
+        >>> uniax.pl.laminate.e1
+        41475334359.052193
+        >>> uniax.pl.laminate.e2
+        14411758748.890478
+        >>> uniax.pl.laminate.g12
+        4676103068.022542
+        >>> uniax.pl.laminate.nu12
+        0.23984539741893107
+        '''
+
+        biax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
+        # lamina properties
+        biax.lamina_properties(fvf=0.5)
+
+        biax.E1
+        biax.E2
+        biax.E3
+        biax.G12
+        biax.G23
+        biax.G13
+        biax.nu12
+        biax.nu23
+        biax.nu13
+
+        '''
+        >>> biax.E1
+        39875728213.725014
+        >>> biax.E2
+        11410056461.307756
+        >>> biax.E3
+        11410056461.307756
+        >>> biax.G12
+        4116112582.1685057
+        >>> biax.G23
+        3906239477.590991
+        >>> biax.G13
+        4116112582.1685057
+        >>> biax.nu12
+        0.275        
+        >>> biax.nu23
+        0.46049116122604294
+        >>> biax.nu13
+        0.275
+        '''
+
+        # total mass per area of fabric (fibers incl sizing)
+        mA_F = 0.6
+        # mass per area of fabric's laminae
+        mA_Fs = np.array([.5, .5]) * mA_F
+        # angles of fabric's laminae
+        angles = np.array([-45.0, +45.0])
+        # thicknesses of fabric's laminae
+        t_F = mA_Fs / (biax.f.rho * biax.fvf)
+
+        t_T = 0.
+        rho_F = biax.f.rho
+
+        # set fabric density
+        biax.rho_F = rho_F
+
+        # laminate properties
+        biax.laminate_properties(thicknesses=t_F,
+                                 angles=angles,
+                                 stitch=self.pes,
+                                 t_T=t_T)
+
+        biax.pl.laminate.e1
+        biax.pl.laminate.e2
+        biax.pl.laminate.g12
+        biax.pl.laminate.nu12
+
+        '''
+        >>> biax.pl.laminate.e1
+        12864422952.357038
+        >>> biax.pl.laminate.e2
+        12864422952.357037
+        >>> biax.pl.laminate.g12
+        11501447448.46925
+        >>> biax.pl.laminate.nu12
+        0.56269085156796561
+        '''
+
+        triax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
+        # lamina properties
+        triax.lamina_properties(fvf=0.5)
+
+        # total mass per area of fabric (fibers incl sizing)
+        mA_F = 0.9
+        # mass per area of fabric's laminae
+        mA_Fs = np.array([0.3, 0.35, 0.35]) * mA_F
+        # angles of fabric's laminae
+        angles = np.array([0., -45., +45.])
+        # thicknesses of fabric's laminae
+        t_F = mA_Fs / (triax.f.rho * triax.fvf)
+
+        t_T = 0.
+        rho_F = triax.f.rho
+
+        # set fabric density
+        triax.rho_F = rho_F
+
+        # laminate properties
+        triax.laminate_properties(thicknesses=t_F,
+                                  angles=angles,
+                                  stitch=self.pes,
+                                  t_T=t_T)
+
+        triax.pl.laminate.e1
+        triax.pl.laminate.e2
+        triax.pl.laminate.g12
+        triax.pl.laminate.nu12
+
+        '''
+        >>> triax.pl.laminate.e1
+        21196635637.131153
+        >>> triax.pl.laminate.e2
+        13913842366.712135
+        >>> triax.pl.laminate.g12
+        9285846988.5790272
+        >>> triax.pl.laminate.nu12
+        0.50233167427961067
+        '''
+
+        pl = Plate(width=0.)
+
+        pl.materials['uniax'] = uniax
+        pl.materials['biax'] = biax
+        pl.materials['triax'] = triax
+
+        pl.s = [0]
+        pl.init_regions(1)
+
+        # add materials to regions layup
+        r = pl.regions['region00']
+        l = r.add_layer('triax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('uniax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('uniax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+        l = r.add_layer('triax')
+        l.thickness = np.array([8.000000000000000167e-03])
+        l.angle = np.zeros(1)
+
+        pl.init_layup(ridx=0, sidx=0)
+
+        exx_t = 2190.E-06
+        eps_laminate = np.array([exx_t, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+        eMsmaxs = []
+        for k, v in pl.regions['region00'].layers.iteritems():
+            matname = k[:-2]
+            matobj = pl.materials[matname]
+            _sMes, _eMs = matobj.recover_laminate_stresses(eps_laminate)
+            matobj_thicks = matobj.pl.regions['region00'].thick_matrix[0]
+            bool = matobj_thicks / matobj_thicks
+            sMes, eMs = _sMes * bool, _eMs * bool
+
+            eMsmax = np.nanmax(eMs)
+            eMsmaxs.append(eMsmax)
+
+        np.asarray(eMsmaxs)
 
 
 if __name__ == "__main__":

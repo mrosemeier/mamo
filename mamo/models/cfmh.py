@@ -1,9 +1,8 @@
 import numpy as np
-from pasta.plate import Plate
-
+from pasta.core.plate import Plate
 
 # micro properties as of Krimmer PhD
-'''f
+'''
 epoxy_resin = Material()
 epoxy_resin.set_props_iso(E1=3.218E+09,
                           nu12=0.37,
@@ -67,7 +66,7 @@ class CompositeCFMh(object):
         self.mA_tot = mA_tot
         self.mA_F = mA_F
         self.mA_T = mA_T
-        #self.psi_M = psi_M
+        # self.psi_M = psi_M
         self.rho_Gl = rho_Gl
         self.rho_T = rho_T
         self.rho_R = rho_R
@@ -86,7 +85,7 @@ class CompositeCFMh(object):
         self.psi_T = mA_T / mA_tot  # mass fraction stitching thread
 
         psi_M = 1 - self.psi_Gl - self.psi_S - self.psi_T  # psi_M determ_tined
-        #self.psi_T = 1 - self.psi_Gl - psi_M
+        # self.psi_T = 1 - self.psi_Gl - psi_M
 
         # eq.3.41 # mass fraction fabric
         self.psi_f = self.psi_Gl + self.psi_S + self.psi_T
@@ -134,10 +133,10 @@ class CompositeCFMh(object):
         #    (self.psi_f * self.rho_M + (1 - self.psi_f) * self.rho_M)
 
         # correct matrix density
-        #self.m.rho = self.rho_M
+        # self.m.rho = self.rho_M
 
         # layer thicknesses
-        #self.t_Gl = self.mA_Gl / (rho_Gl * self.fvf)
+        # self.t_Gl = self.mA_Gl / (rho_Gl * self.fvf)
         self.t_f = self.mA_G / (self.rho_G * self.fvf)
         self.t_T = mA_T / (self.rho_T * self.fvf)
 
@@ -154,7 +153,7 @@ class CompositeCFMh(object):
         # eq 5
         def eq_five(first_term_t, oneminfrac):
             result = 2. * first_term_t / sqrt3 * (sqrt3 / 2. - np.sqrt(twosqrt3fvfpi) - np.pi / (2. * oneminfrac) + ((np.pi / 2. + np.arctan(
-                (np.sqrt(twosqrt3fvfpi) * oneminfrac) / np.sqrt(1. - twosqrt3fvfpi * oneminfrac**2))) / (oneminfrac * np.sqrt(1. - twosqrt3fvfpi * oneminfrac**2))))
+                (np.sqrt(twosqrt3fvfpi) * oneminfrac) / np.sqrt(1. - twosqrt3fvfpi * oneminfrac ** 2))) / (oneminfrac * np.sqrt(1. - twosqrt3fvfpi * oneminfrac ** 2))))
             return result
 
         self.ET = eq_five(self.m.E1, oneminemeft)
@@ -163,20 +162,21 @@ class CompositeCFMh(object):
         self.nuMTprime = (1. - (self.f.nu12 + self.f.nu23) * self.m.E1 /
                           (self.m.nu23 * (self.f.E1 + self.f.E2))) * self.m.nu23
 
-        A = self.ET / self.m.E2 * (1. - self.nuMTprime**2) + self.nuMTprime**2
+        A = self.ET / self.m.E2 * \
+            (1. - self.nuMTprime ** 2) + self.nuMTprime ** 2
 
-        self.EMTprime = (self.f.E1 * A * fvf + self.ET * (1. - fvf)) /\
-            (self.f.E1 / self.m.E1 * (self.ET / self.m.E2 * (1. - 3. * self.nuMTprime**2 - 2. * self.nuMTprime**3) +
-                                      2. * (self.nuMTprime**2 + self.nuMTprime**3)) * fvf +
+        self.EMTprime = (self.f.E1 * A * fvf + self.ET * (1. - fvf)) / \
+            (self.f.E1 / self.m.E1 * (self.ET / self.m.E2 * (1. - 3. * self.nuMTprime ** 2 - 2. * self.nuMTprime ** 3) +
+                                      2. * (self.nuMTprime ** 2 + self.nuMTprime ** 3)) * fvf +
              A * (1. - fvf))
 
         # eq. 7
         self.nuMLprime = (1. - (self.f.nu12 * self.m.E1) /
                           (self.m.nu12 * self.f.E2)) * self.m.nu12
 
-        self.EMLprime = (self.ET * (1. - self.nuMLprime) + self.m.E1 * self.nuMLprime) /\
+        self.EMLprime = (self.ET * (1. - self.nuMLprime) + self.m.E1 * self.nuMLprime) / \
             (self.ET / self.m.E1 * (1. - self.nuMLprime) + self.nuMLprime +
-             2. * self.nuMLprime**2 * (1. - self.ET / self.m.E1))
+             2. * self.nuMLprime ** 2 * (1. - self.ET / self.m.E1))
 
         # eq 8
         self.E1 = self.ELprime = self.f.E1 * \
@@ -188,12 +188,12 @@ class CompositeCFMh(object):
             self.EMTprime, oneminemtprimeeft)
 
         # eq 10
-        self.GMLTprime = (self.EMTprime + self.EMLprime) /\
+        self.GMLTprime = (self.EMTprime + self.EMLprime) / \
             (4. * (1. + self.m.nu12))
 
         self.nuMTTprime = self.m.nu23 * (1 + fvf * (self.f.E1 / self.m.E1 * (1 + self.nuMTprime) - 1.)) / \
             (1. + fvf * (self.f.E1 / self.m.E1 *
-                         (1. + self.nuMTprime**2 * (self.m.E1 / self.ET - 1.)) - 1.))
+                         (1. + self.nuMTprime ** 2 * (self.m.E1 / self.ET - 1.)) - 1.))
 
         self.GMTTprime = self.EMTprime / (2. * (1. + self.nuMTTprime))
 
@@ -215,9 +215,58 @@ class CompositeCFMh(object):
 
         self.nu23 = self.nuTT = self.ETprime / (2. * self.GTTprime) - 1.
 
+        self._determine_cte()
+
+    def _determine_cte(self):
+        ''' cte of the lamina
+        '''
+
+        if not self.f.cte1:
+            self.f.cte1 = 0.
+        if not self.f.cte2:
+            self.f.cte2 = 0.
+        if not self.m.cte1:
+            self.m.cte1 = 0.
+
+        fvf = self.fvf
+        cte_M = self.m.cte1
+        cte_FL = self.f.cte1
+        cte_FT = self.f.cte2
+        EFL = self.f.E1
+        EFT = self.f.E2
+
+        use_krimmer = True
+        if use_krimmer:
+            # longitudinal according to Krimmer 201X Hygro-thermal behaviour of
+            # unidirectionally fibre reinforced polymer matrix composites
+            self.cte1 = (fvf * EFL * cte_FL + (1 - fvf) *
+                         self.EMLprime * cte_M) / self.ELprime
+            self.cte2 = (fvf * EFT * cte_FT + (1 - fvf) *
+                         self.EMTprime * cte_M) / self.ETprime
+        else:
+            EM = self.m.E1
+            nuM = self.m.nu12
+            # longitudinal according to Schuermann eq. 12.9
+            self.cte1 = (cte_M * EM * (1 - fvf) + cte_FL * EFL * fvf) / \
+                (EM * (1 - fvf) + EFL * fvf)
+
+            simple_cte2 = True
+            if simple_cte2:
+                # transverse according to Schuermann eq. 12.10
+                self.cte2 = fvf * cte_FT + (1 - fvf) * cte_M
+            else:
+                # transverse according to Schneider (Schuermann eq. 12.12)
+                self.cte2 = cte_M - (cte_M - cte_FT) * \
+                    ((2 * (nuM ** 3 + nuM ** 2 - nuM - 1) * 1.1 * fvf) /
+                     (1.1 * fvf * (2 * nuM ** 2 + nuM - 1) - (1 + nuM)) -
+                     (nuM * EFT / EM) / (EFT / EM + (1 - 1.1 * fvf) /
+                                         (1.1 * fvf)))
+
+        self.cte3 = self.cte2
+
     def init_matrix_area_dens(self, mA_Fs, psi_M):
         # mA_F/(mA_F + mA_M)=(1-psi_M)
-        #mA_F = (1-psi_M)*mA_F + (1-psi_M)*mA_M\
+        # mA_F = (1-psi_M)*mA_F + (1-psi_M)*mA_M\
 
         mA_F = np.sum(mA_Fs)
         mA_M = (1 - (1 - psi_M)) * mA_F / (1 - psi_M)
@@ -232,21 +281,21 @@ class CompositeCFMh(object):
                                nu12=0.28,
                                rho=1370.0)
         '''
-        #fvf = 0.549
-        #self.comp = CompositeCFMh(self.f, self.m, fu)
+        # fvf = 0.549
+        # self.comp = CompositeCFMh(self.f, self.m, fu)
         # self.comp.lamina_properties(fvf)
 
         # area densities according to Saertex UD-1200
-        #mA_Fs = np.array([1.134, 0.054, 0.054, 1.134])
+        # mA_Fs = np.array([1.134, 0.054, 0.054, 1.134])
         # set dominant laminae for post processing
         # self.dom_lam = dom_lam  # [0, 3]
-        #mA_T = 0.012
-        #angles = np.array([0.0, 90.0, 90.0, 0.0])
+        # mA_T = 0.012
+        # angles = np.array([0.0, 90.0, 90.0, 0.0])
 
         mA_F = np.sum(mA_Fs)
         self.mA_G = mA_F + mA_T
 
-        #psi_SF = 0.0055
+        # psi_SF = 0.0055
         self.mA_S = psi_SF * mA_F
         self.mA_Gl = (1 - psi_SF) * mA_F
         # (1 - (1 - psi_M)) * mA_F / (1 - psi_M)
@@ -255,7 +304,7 @@ class CompositeCFMh(object):
 
         self.psi_G = self.mA_G / self.mA_tot
 
-        #rho_S = 1150.0
+        # rho_S = 1150.0
         rho_Gl = self.f.rho
         self.rho_F = mA_F / (self.mA_Gl / rho_Gl + self.mA_S / rho_S)
         self.rho_G = self.mA_G / \
@@ -263,8 +312,8 @@ class CompositeCFMh(object):
         self.rho_tot = self.mA_tot / \
             (self.mA_G / self.rho_G + self.mA_M / self.m.rho)
 
-        #self.mA_M = (1 - self.fvf) * self.m.rho * self.t_tot
-        #self.fvf = 1 - self.mA_M / (self.m.rho * self.t_tot)
+        # self.mA_M = (1 - self.fvf) * self.m.rho * self.t_tot
+        # self.fvf = 1 - self.mA_M / (self.m.rho * self.t_tot)
         # self.fvf = self.psi_G * self.m.rho / \
         #    (self.psi_G * self.m.rho + (1 - self.psi_G)
         #     * self.m.rho)  # eq.3.49
@@ -301,7 +350,11 @@ class CompositeCFMh(object):
                         G12=self.G12,
                         G13=self.G13,
                         G23=self.G23,
-                        rho=self.rho_F)
+                        rho=self.rho_F,
+                        cte1=self.cte1,
+                        cte2=self.cte2,
+                        cte3=self.cte3
+                        )
 
         self.pl.s = [0]
         self.pl.init_regions(1)
@@ -315,7 +368,8 @@ class CompositeCFMh(object):
         stitchingthread = self.pl.add_material('stitchingthread')
         stitchingthread.set_props_iso(E1=stitch.E1,  # 1.5E+10,
                                       nu12=stitch.nu12,  # 0.28,
-                                      rho=stitch.rho
+                                      rho=stitch.rho,
+                                      cte1=self.cte1
                                       )
 
         l = r.add_layer('stitchingthread')
@@ -358,9 +412,9 @@ class CompositeCFMh(object):
 
         sM = np.array([sM1, sM2, sM3, sM21, sM31, sM23])
 
-        sMe = np.sqrt(sM[0]**2 + sM[1]**2 + sM[2]**2 -
+        sMe = np.sqrt(sM[0] ** 2 + sM[1] ** 2 + sM[2] ** 2 -
                       2 * self.m.nu12 * (sM[0] * sM[1] + sM[1] * sM[2] + sM[2] * sM[0]) +
-                      2 * (1 + self.m.nu12) * (sM[3]**2 + sM[4]**2 + sM[5]**2))
+                      2 * (1 + self.m.nu12) * (sM[3] ** 2 + sM[4] ** 2 + sM[5] ** 2))
 
         eM = sMe / self.m.s11_t
         return sM, sMe, eM
@@ -373,7 +427,7 @@ class CompositeCFMh(object):
 
         '''
         # determine strain vector due to axial loading
-        #F = np.zeros(6)
+        # F = np.zeros(6)
         # Fx = F[0] = 1580E+3  # unit load
 
         from scipy import optimize
@@ -383,19 +437,20 @@ class CompositeCFMh(object):
             F = f * elaminate_target / (elaminate_target + EPS)
             eps = self.pl.laminate.apply_load(F, dT=0.)
             return abs(np.max(abs(elaminate_target)) - np.max(abs(eps)))
+
         f = optimize.brent(min_func)
 
         F = f * elaminate_target / (elaminate_target + EPS)
         elaminate = self.pl.laminate.apply_load(F, dT=0.)
 
-        #sMs = np.zeros(len(self.pl.laminate.plies))
+        # sMs = np.zeros(len(self.pl.laminate.plies))
         sMes = np.zeros(len(self.pl.laminate.plies))
         eMs = np.zeros(len(self.pl.laminate.plies))
         for i, ply in enumerate(self.pl.laminate.plies):
             eps, sig = ply.calc_loading(elaminate)
             _, sMe, eM = self.matrix_stresses(
                 sE=sig, sR=np.zeros_like(sig), aMT=0, dT=0, aMM=0, dM=0, aMP=0)
-            #sMs[i] = sM
+            # sMs[i] = sM
             sMes[i] = sMe
             eMs[i] = eM
         return sMes, eMs

@@ -1,45 +1,18 @@
 import numpy as np
 from pasta.core.plate import Plate
 
-# micro properties as of Krimmer PhD
-'''
-epoxy_resin = Material()
-epoxy_resin.set_props_iso(E1=3.218E+09,
-                          nu12=0.37,
-                          rho=1.15E+03)
-epoxy_resin.G23
-
-gfecr = Material()
-gfecr.set_props(E1=77.314E+09,
-                E2=81.383E+09,
-                E3=81.383E+09,
-                nu12=0.21,
-                nu13=0.21,
-                nu23=0.22,
-                G12=33.326E+09,
-                G13=33.326E+09,
-                G23=33.326E+09,
-                rho=2.6E+03)
-
-cfecr = Material()
-cfecr.set_props(E1=218.620E+09,
-                E2=14.137E+09,
-                E3=14.137E+09,
-                nu12=0.33,
-                nu13=0.33,
-                nu23=0.49,
-                G12=71.528E+09,
-                G13=71.528E+09,
-                G23=5.315E+09,
-                rho=999999E+03)
-'''
-
 
 class CompositeCFMh(object):
     ''' Implementation of the CFM_h (german ZFM_h) model as of Krimmer 2016
     '''
 
-    def __init__(self, fiber, matrix, fu):
+    def __init__(self, fiber, matrix, fu=1.0):
+        '''
+        Initialize fiber and matrix objects.
+        :param: fiber: Fused-wind material object
+        :param: matrix: Fused-wind material object
+        :param: fu: undulation reduction factor (float)
+        '''
         self.f = fiber
         self.m = matrix
 
@@ -47,6 +20,31 @@ class CompositeCFMh(object):
         # according to Krimmer 2014, eq. 3.1
         self.f.E1 = fu * self.f.E1
         self.f.nu12 = self.f.nu13 = fu * self.f.nu12
+
+        # init input material properties for post-processing
+        self.f_E1 = self.f.E1
+        self.f_E2 = self.f.E2
+        self.f_E3 = self.f.E3
+        self.f_G12 = self.f.G12
+        self.f_G23 = self.f.G23
+        self.f_G13 = self.f.G13
+        self.f_nu12 = self.f.nu12
+        self.f_nu23 = self.f.nu23
+        self.f_nu13 = self.f.nu13
+        self.f_cte1 = self.f.cte1
+        self.f_cte2 = self.f.cte2
+
+        self.m_E1 = self.m.E1
+        self.m_E2 = self.m.E2
+        self.m_E3 = self.m.E3
+        self.m_G12 = self.m.G12
+        self.m_G23 = self.m.G23
+        self.m_G13 = self.m.G13
+        self.m_nu12 = self.m.nu12
+        self.m_nu23 = self.m.nu23
+        self.m_nu13 = self.m.nu13
+        self.m_cte1 = self.m.cte1
+        self.m_cte2 = self.m.cte2
 
     def init_fvf_measurements(self,
                               mA_tot,
@@ -142,6 +140,7 @@ class CompositeCFMh(object):
 
     def lamina_properties(self, fvf):
         ''' use either a random vector for fvf or self.fvf
+        :param: fvf: fiber volume fraction (float)
         '''
         self.fvf = fvf
 
@@ -218,7 +217,7 @@ class CompositeCFMh(object):
         self._determine_cte()
 
     def _determine_cte(self):
-        ''' cte of the lamina
+        ''' smear ctes of the lamina
         '''
 
         if not self.f.cte1:
@@ -264,160 +263,262 @@ class CompositeCFMh(object):
 
         self.cte3 = self.cte2
 
-    def init_matrix_area_dens(self, mA_Fs, psi_M):
-        # mA_F/(mA_F + mA_M)=(1-psi_M)
-        # mA_F = (1-psi_M)*mA_F + (1-psi_M)*mA_M\
-
-        mA_F = np.sum(mA_Fs)
-        mA_M = (1 - (1 - psi_M)) * mA_F / (1 - psi_M)
-        return self.mA_M
-
-    def make_laminate(self, mA_Fs, stitch, mA_T,
-                      psi_SF, rho_S, psi_M):
-
-        self.s = stitch  # Material()
+    def laminate_properties(self, mA_Fs, angles, mA_T, psi_SF, rho_S, stitch):
+        ''' Calc of laminate properties
+        :param: mA_Fs: vector of fiber area density per lamina in kg/m**2 (np.array)
+        :param: angles: vector of fiber angles per lamina in deg (np.array)
+        :param: psi_SF: mass fraction of sizing per fiber mass (float)
+        :param: rho_S: Density of sizing (float)
+        :param: mA_T: area density of stitching thread in kg/m**2 (float)
+        :param: stitch: Fused-wind material object for stitching thread
         '''
-        self.pes.set_props_iso(E1=1.5E+10,
-                               nu12=0.28,
-                               rho=1370.0)
-        '''
-        # fvf = 0.549
-        # self.comp = CompositeCFMh(self.f, self.m, fu)
-        # self.comp.lamina_properties(fvf)
 
-        # area densities according to Saertex UD-1200
-        # mA_Fs = np.array([1.134, 0.054, 0.054, 1.134])
-        # set dominant laminae for post processing
-        # self.dom_lam = dom_lam  # [0, 3]
-        # mA_T = 0.012
-        # angles = np.array([0.0, 90.0, 90.0, 0.0])
-
-        mA_F = np.sum(mA_Fs)
-        self.mA_G = mA_F + mA_T
-
-        # psi_SF = 0.0055
-        self.mA_S = psi_SF * mA_F
-        self.mA_Gl = (1 - psi_SF) * mA_F
-        # (1 - (1 - psi_M)) * mA_F / (1 - psi_M)
-        self.mA_M = (1 - (1 - psi_M)) * self.mA_G / (1 - psi_M)
-        self.mA_tot = self.mA_G + self.mA_M
-
-        self.psi_G = self.mA_G / self.mA_tot
-
-        # rho_S = 1150.0
-        rho_Gl = self.f.rho
-        self.rho_F = mA_F / (self.mA_Gl / rho_Gl + self.mA_S / rho_S)
-        self.rho_G = self.mA_G / \
-            (self.mA_Gl / rho_Gl + self.mA_S / rho_S + mA_T / self.s.rho)
-        self.rho_tot = self.mA_tot / \
-            (self.mA_G / self.rho_G + self.mA_M / self.m.rho)
-
-        # self.mA_M = (1 - self.fvf) * self.m.rho * self.t_tot
-        # self.fvf = 1 - self.mA_M / (self.m.rho * self.t_tot)
-        # self.fvf = self.psi_G * self.m.rho / \
-        #    (self.psi_G * self.m.rho + (1 - self.psi_G)
-        #     * self.m.rho)  # eq.3.49
-        self.fvf = self.rho_tot / self.rho_G * self.psi_G
-
-        self.t_Fs = mA_Fs / (self.rho_F * self.fvf)
-        self.t_T = mA_T / (self.s.rho * self.fvf)
-
-        self.t_F = np.sum(self.t_Fs)
+        self.s = stitch
+        # lamina fiber densities
+        self.mA_Fs = mA_Fs
+        # fiber area density
+        self.mA_F = mA_F = np.sum(mA_Fs)
+        # stitching thread density
+        self.mA_T = mA_T
+        # thickness of laminas (Eq. 3.52)
+        self.t_Fs = self.mA_Fs / (self.f.rho * self.fvf)
+        # thickness of laminas (Eq. 3.52)
+        self.t_F = self.mA_F / (self.f.rho * self.fvf)
+        # thickness of stitching thread lamina (Eq. 3.52)
+        self.t_T = self.mA_T / (self.s.rho * self.fvf)
+        # thickness of laminate
         self.t_tot = self.t_F + self.t_T
-
-        self.rho_M = self.m.rho
-
-        self.psi_F = mA_F / self.mA_tot
+        # area density of matrix (derived from Eq. 3.52)
+        self.mA_M = (1 - self.fvf) * self.m.rho * self.t_tot
+        # area density of fabric
+        mA_G = mA_F + mA_T
+        # area density of fiber (w/o sizing)
+        self.mA_Gl = mA_G * (1 - psi_SF) - mA_T
+        # area density of sizing
+        self.mA_S = mA_F * psi_SF
+        # laminate area density
+        self.mA_tot = mA_G + self.mA_M
+        # matrix mass fraction
         self.psi_M = self.mA_M / self.mA_tot
+        # fiber mass fraction(w/o sizing)
+        self.psi_Gl = self.mA_Gl / self.mA_tot
+        # sizing mass fraction
+        self.psi_S = self.psi_Gl * psi_SF / (1 - psi_SF)
+        # density of fiber (w/o sizing)
+        self.rho_Gl = self.f.rho
+        # fiber mass fraction (with sizing)
+        psi_F = self.psi_Gl + self.psi_S
+        # density of sizing
+        self.rho_S = rho_S
+        # density of fiber (with sizing)
+        rho_F = psi_F / (self.psi_Gl / self.rho_Gl + self.psi_S / self.rho_S)
+        # stitching thread mass fraction
+        self.psi_T = mA_T / mA_F * psi_F
+        # fabric mass fraction
+        psi_G = psi_F + self.psi_T
+        # matrix mass fraction
+        psi_M = 1 - psi_G
+        # density of matrix
+        self.rho_M = self.m.rho
+        # stitching thread density
+        self.rho_T = self.s.rho
+        # density of fabric
+        self.rho_G = psi_G / (self.psi_Gl / self.rho_Gl +
+                              self.psi_S / rho_S + self.psi_T / self.rho_T)
+        # fabric mass fraction (fiber + sizing + stitching)
+        # derived from corrected! Eq.3.49
+        psi_G = self.fvf * self.rho_G / \
+            (self.fvf * (self.rho_G - self.rho_M) + self.rho_M)
 
-        # self.laminate_properties(thicknesses=t_Fs,
-        #                         angles=angles,
-        #                         stitch=self.pes,
-        #                         t_T=t_T)
+        # density of laminate
+        self.rho_tot = 1 / (self.psi_Gl / self.rho_Gl + self.psi_S / self.rho_S +
+                            self.psi_T / self.rho_T + psi_M / self.rho_M)
 
-    def laminate_properties(self, thicknesses, angles, stitch, t_T):
-        ''' determines laminate smeared properties
+        # set fabric density
+        self.rho_F = rho_F
+
+        self.angles = angles
+
+        self._smeared_properties()
+
+        # init stitching thread properties
+        self.s_E1 = self.s.E1
+        self.s_G12 = self.s.G12
+        self.s_nu12 = self.s.nu12
+        self.s_cte1 = self.s.cte1
+
+    def write_laminate_properties(self, filename):
+        ''' Writes a list of laminate properties to file
+        '''
+        fmsprop_list = ['f_E1',
+                        'f_E2',
+                        'f_G12',
+                        'f_nu12',
+                        'f_cte1',
+                        'm_E1',
+                        'm_G12',
+                        'm_nu12',
+                        'm_cte1',
+                        's_E1',
+                        's_G12',
+                        's_nu12',
+                        's_cte1',
+                        ]
+
+        self._write_variables(filename, fmsprop_list,
+                              'w', 'fiber, matrix, and stitching thread properties')
+
+        laminaprop_list = ['E1',
+                           'E2',
+                           'E3',
+                           'G12',
+                           'G23',
+                           'G13',
+                           'nu12',
+                           'nu23',
+                           'nu13',
+                           'cte1',
+                           'cte2',
+                           ]
+
+        self._write_variables(filename, laminaprop_list,
+                              'a', 'lamina stiffness properties')
+
+        massprop_list = ['fvf',
+                         'mA_Gl',
+                         'mA_S',
+                         'mA_T',
+                         'mA_M',
+                         'mA_tot',
+                         'psi_Gl',
+                         'psi_S',
+                         'psi_T',
+                         'psi_M',
+                         'rho_Gl',
+                         'rho_S',
+                         'rho_T',
+                         'rho_M',
+                         'rho_tot',
+                         't_Fs',
+                         't_T',
+                         't_tot'
+                         ]
+
+        self._write_variables(filename, massprop_list,
+                              'a', 'laminate mass properties')
+
+        laminateprop_list = ['Ex',
+                             'Ey',
+                             'Ez',
+                             'Gxy',
+                             'Gyz',
+                             'Gxz',
+                             'nuxy',
+                             'nuyz',
+                             'nuxz',
+                             'ctex',
+                             'ctey',
+                             ]
+
+        self._write_variables(filename, laminateprop_list,
+                              'a', 'laminate stiffness properties')
+
+    def _write_variables(self, filename, variable_list, mode='w', header=''):
+        ''' Writes a list of property names to a text file in the manner:
+        variable_name = variable_value
+        The function handles str, bool, int, floats. If a variable is not
+        existing it is skipped.
+        :param filename: the file to write the variables
+        :param variable_list: the list of variable names
+        :param mode: 'w' = write or 'a'= append
+        :param header: header line
+        '''
+        with open(filename, mode) as write_file:
+            if header:
+                write_file.write('# ' + header + '\n')
+            for k in variable_list:
+                try:
+                    v = getattr(self, k)
+                except:
+                    print 'Attribute %s not found' % k
+                    v = None
+                k_str = k  # .upper()  # upper case for APDL conformity
+                if isinstance(v, bool):
+                    v_str = str(int(v))
+                elif isinstance(v, str):
+                    v_str = "'" + v + "'"  # .upper()
+                else:
+                    v_str = str(v)
+                write_file.write(k_str + ' = ' + v_str + '\n')
+
+    def _smeared_properties(self):
+        ''' Creates a PASTA plate object and determines laminate smeared properties
         '''
         self.pl = Plate(width=0.0)
-        uniax = self.pl.add_material('uniax')
+        udlayer = self.pl.add_material('udlayer')
 
-        uniax.set_props(E1=self.E1,
-                        E2=self.E2,
-                        E3=self.E3,
-                        nu12=self.nu12,
-                        nu13=self.nu13,
-                        nu23=self.nu23,
-                        G12=self.G12,
-                        G13=self.G13,
-                        G23=self.G23,
-                        rho=self.rho_F,
-                        cte1=self.cte1,
-                        cte2=self.cte2,
-                        cte3=self.cte3
-                        )
+        udlayer.set_props(E1=self.E1,
+                          E2=self.E2,
+                          E3=self.E3,
+                          nu12=self.nu12,
+                          nu13=self.nu13,
+                          nu23=self.nu23,
+                          G12=self.G12,
+                          G13=self.G13,
+                          G23=self.G23,
+                          rho=self.rho_F,
+                          cte1=self.cte1,
+                          cte2=self.cte2,
+                          cte3=self.cte3
+                          )
 
         self.pl.s = [0]
         self.pl.init_regions(1)
-        # add uniax layers to regions layup
+        # add udlayer layers to regions layup
         r = self.pl.regions['region00']
-        for thickness, angle in zip(thicknesses, angles):
-            l = r.add_layer('uniax')
+        for thickness, angle in zip(self.t_Fs, self.angles):
+            l = r.add_layer('udlayer')
             l.thickness = np.array([thickness])
             l.angle = np.array([angle])
 
         stitchingthread = self.pl.add_material('stitchingthread')
-        stitchingthread.set_props_iso(E1=stitch.E1,  # 1.5E+10,
-                                      nu12=stitch.nu12,  # 0.28,
-                                      rho=stitch.rho,
+        stitchingthread.set_props_iso(E1=self.s.E1,  # 1.5E+10,
+                                      nu12=self.s.nu12,  # 0.28,
+                                      rho=self.s.rho,
                                       cte1=self.cte1
                                       )
 
         l = r.add_layer('stitchingthread')
-        l.thickness = np.array([t_T])
+        l.thickness = np.array([self.t_T])
         l.angle = np.array([0])
 
         self.pl.init_layup(ridx=0, sidx=0, lidx=[])
         self.pl.laminate.force_symmetric()
         self.pl.laminate.calc_equivalent_modulus()
 
-    def matrix_stresses(self, sE, sR, aMT, dT, aMM, dM, aMP):
-        ''' stress vector comes in notation:
-        [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
-        '''
+        # assign smeared properties to cpmh object
+        self.Ex = self.pl.laminate.e1
+        self.Ey = self.pl.laminate.e2
+        self.Gxy = self.pl.laminate.g12
+        self.nuxy = self.pl.laminate.nu12
+        self.ctex = self.pl.laminate.a1
+        self.ctey = self.pl.laminate.a2
+        self.ctexy = self.pl.laminate.a12
 
-        # eq. 18
-        sRTMP = (aMT * dT + aMM * dM + aMP) * self.m.E1
+        # derived properties from lamina (neglecting stitching thread layer)
+        self.Ez = self.E3
+        use_schuerman = False
+        if use_schuerman:
+            # Schuermann, p.202, eq. 8.35
+            self.Gyz = self.E3 / (2 * (1 + self.nu13))
+        else:
+            # take from lamina
+            self.Gyz = self.G23
+        self.nuyz = self.nu23
 
-        # eq. 14
-        sM1 = (sE[0] + sR[0]) / self.ELprime * self.EMLprime - sRTMP
-
-        # eq. 15
-        def eq_15(u_term_t, b_term_t, c1l_term_t, c2l_term_t, c2u_term_t):
-            return u_term_t / (b_term_t * ((np.sqrt(self.twosqrt3fvfpi) /
-                                            c1l_term_t) + ((c2u_term_t - np.sqrt(self.twosqrt3fvfpi)) / c2l_term_t))) - sRTMP
-
-        sM2 = eq_15(sE[1] + sR[1], self.ETprime, self.f.E2, self.EMTprime, 1)
-        sM3 = eq_15(
-            sE[2] + sR[2], self.ETprime, self.f.E2, self.EMTprime, np.sqrt(3))
-
-        # eq. 16
-        sM21 = eq_15(
-            sE[5] + sR[5], self.GLTprime, self.f.G12, self.GMLTprime, 1)
-        sM31 = eq_15(
-            sE[4] + sR[4], self.GLTprime, self.f.G12, self.GMLTprime, np.sqrt(3))
-
-        # eq. 17
-        sM23 = eq_15(
-            sE[3] + sR[3], self.GTTprime, self.f.G23, self.GMTTprime, 1)
-
-        sM = np.array([sM1, sM2, sM3, sM21, sM31, sM23])
-
-        sMe = np.sqrt(sM[0] ** 2 + sM[1] ** 2 + sM[2] ** 2 -
-                      2 * self.m.nu12 * (sM[0] * sM[1] + sM[1] * sM[2] + sM[2] * sM[0]) +
-                      2 * (1 + self.m.nu12) * (sM[3] ** 2 + sM[4] ** 2 + sM[5] ** 2))
-
-        eM = sMe / self.m.s11_t
-        return sM, sMe, eM
+        # set 13 and 12 planes equal
+        self.Gxz = self.Gxy
+        self.nuxz = self.nuxy
 
     def recover_laminate_stresses(self, elaminate_target):
         '''
@@ -447,10 +548,163 @@ class CompositeCFMh(object):
         sMes = np.zeros(len(self.pl.laminate.plies))
         eMs = np.zeros(len(self.pl.laminate.plies))
         for i, ply in enumerate(self.pl.laminate.plies):
-            eps, sig = ply.calc_loading(elaminate)
-            _, sMe, eM = self.matrix_stresses(
-                sE=sig, sR=np.zeros_like(sig), aMT=0, dT=0, aMM=0, dM=0, aMP=0)
+            _, sig = ply.calc_loading(elaminate)
+            _, sMe, eM, _ = self.matrix_stresses(sE=sig, sR=np.zeros_like(sig))
             # sMs[i] = sM
             sMes[i] = sMe
             eMs[i] = eM
         return sMes, eMs
+
+    def matrix_stresses(self, sE, sR, dT=0., dM=0., aMP=0., g_mat_static=1.0):
+        ''' stress vector comes in notation:
+        [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
+        :param: sE: external stress
+        :param: sR: residual stress
+        :param: dT: temperature difference
+        :param: dM: mass difference due to moisture effects
+        :param: aMP: polymer-physical expansion
+        :param: g_mat_static: fatigue safety factor for matrix
+        :return: sM: matrix stress vector
+        :return: sMe: matrix equivalent stress
+        :return: eM: matrix stress exposure (effort)
+        :return: mode: matrix failure mode
+        '''
+
+        # eq. 18
+        aMT = self.m.cte1
+        aMM = 0.  # moisture effects not yet implemented
+        sRTMP = (aMT * dT + aMM * dM + aMP) * self.m.E1
+
+        # eq. 14
+        sM1 = (sE[0] + sR[0]) / self.ELprime * self.EMLprime - sRTMP
+
+        # eq. 15
+        def eq_15(u_term_t, b_term_t, c1l_term_t, c2l_term_t, c2u_term_t):
+            return u_term_t / (b_term_t * ((np.sqrt(self.twosqrt3fvfpi) /
+                                            c1l_term_t) + ((c2u_term_t - np.sqrt(self.twosqrt3fvfpi)) / c2l_term_t))) - sRTMP
+
+        sM2 = eq_15(sE[1] + sR[1], self.ETprime, self.f.E2, self.EMTprime, 1)
+        sM3 = eq_15(
+            sE[2] + sR[2], self.ETprime, self.f.E2, self.EMTprime, np.sqrt(3))
+
+        # eq. 16
+        sM21 = eq_15(
+            sE[5] + sR[5], self.GLTprime, self.f.G12, self.GMLTprime, 1)
+        sM31 = eq_15(
+            sE[4] + sR[4], self.GLTprime, self.f.G12, self.GMLTprime, np.sqrt(3))
+
+        # eq. 17
+        sM23 = eq_15(
+            sE[3] + sR[3], self.GTTprime, self.f.G23, self.GMTTprime, 1)
+
+        # matrix stress vector
+        self.sM = sM = np.array([sM1, sM2, sM3, sM21, sM31, sM23])
+        # equivalent stress
+        sMe, mode = self._sigma_beltrami()
+        # stress expusure
+        eM = g_mat_static * sMe / self.m.s11_t
+        return sM, sMe, eM, mode
+
+    def _sigma_beltrami(self):
+        ''' Calculates equivalent stress of the matrix according to Beltrami, 1885, 
+        Sulle condizioni di resistenza dei corpi elastici
+        '''
+        nu = self.m.nu12
+        sigma11 = self.sM[0]
+        sigma22 = self.sM[1]
+        sigma33 = self.sM[2]
+        tau12 = self.sM[3]
+        tau23 = self.sM[5]
+        tau13 = self.sM[4]
+
+        # check if normal tension or compression
+        sign = np.sign((sigma11 + sigma22 + sigma33) / 3.)
+        # correct sign in case all sigmas are zero we set sign negative to check
+        # failure mode
+        if sign.any() == 0:
+            sign = 1.0
+            check_mode = True
+        elif sign.any() == 1.0:
+            mode = 'A'  # tension
+            check_mode = False
+        else:
+            check_mode = True
+        if check_mode:
+            # check which part is contributing most
+            sMe_tc = np.sqrt(sigma11**2 + sigma22**2 + sigma33**2 -
+                             2 * nu * (sigma11 * sigma22 + sigma22 * sigma33 + sigma33 * sigma11))
+            sMe_s = np.sqrt(
+                2 * (1 + nu) * (tau12**2 + tau23**2 + tau13**2))
+            if np.max(sMe_tc) < np.max(sMe_s):
+                mode = 'B'  # shear
+            else:
+                mode = 'C'  # compression
+
+        sMe = sign * np.sqrt(sigma11**2 + sigma22**2 + sigma33**2 -
+                             2 * nu * (sigma11 * sigma22 + sigma22 * sigma33 + sigma33 * sigma11) +
+                             2 * (1 + nu) * (tau12**2 + tau23**2 + tau13**2))
+        # print 'mode = %s' % mode
+        return sMe, mode
+
+    def fatigue_stress_exposure_incr(self,
+                                     m,
+                                     sMe_mi,
+                                     sMe_ai,
+                                     ni,
+                                     g_load=1.0,
+                                     g_mat_static=1.0,
+                                     g_mat_fat=1.0):
+        ''' Calculate fatigue stress exposure of matrix for load increment
+        :param: m: S/N-curve slope of matrix
+        :param: sMe_mi: mean stress
+        :param: sMe_ai: stress amplitude
+        :param: ni: load cycles
+        :param: g_load: safety factor for loads
+        :param: g_mat_static: fatigue safety factor for matrix
+        :param: g_mat_fat: static safety factor for matrix
+        :return: eM_mi: mean stress exposure
+        :return: eM_ai: amplitude stress exposure
+        :return: eM_fi: fatigue stress exposure
+        :return: Di: damage of increment
+        '''
+
+        # upper and lower eq stress
+        sMe_ui = sMe_mi + sMe_ai
+        sMe_li = sMe_mi - sMe_ai
+        # upper and lower effort
+        eM_ui = g_load * sMe_ui / self.m.s11_t
+        eM_li = g_load * sMe_li / self.m.s11_t
+
+        # mean effort Krimmer 2018 IQPC
+        eM_mi = g_mat_static * 0.5 * abs(eM_ui + eM_li)
+        eM_ai = g_mat_fat * 0.5 * abs(eM_ui - eM_li)
+
+        # allowable cycles
+        if eM_ui <= 1:
+            Ni = ((1 - eM_mi) / (eM_ai))**m
+
+        elif eM_ui > 1:
+            # Krimmer degradation IQPC 2018 (no real derivation, just to
+            # overcome poles)
+            Ni = 1. / eM_ui
+        # damage increment of a bin
+        Di = ni / Ni
+        # damage increment of a bin
+        eM_fi = Di**(1.0 / m)
+
+        return eM_mi, eM_ai, eM_fi, Di
+
+    def fatigue_stress_exposure_total(self, m, Di):
+        ''' Calculate fatigue stress exposure of matrix for load increment
+        :param: m: S/N-curve slope of matrix
+        :param: Di: damage of increment
+        :return: eM_f: total fatigue stress exposure
+        :return: D: total damage sum
+        '''
+
+        # total damage
+        D = np.sum(Di)
+        # stress exposure
+        eM_f = D**(1.0 / m)
+
+        return eM_f, D

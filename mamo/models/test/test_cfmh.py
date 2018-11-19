@@ -201,10 +201,11 @@ class MaterialResistanceTestCase(unittest.TestCase):
 
         self.comp.rho_F = rho_F
 
-        self.comp.laminate_properties(thicknesses=t_F,
-                                      angles=angles,
-                                      stitch=self.pes,
-                                      t_T=t_T)
+        # TODO: re-implement this test due to changed implemenation
+        # self.comp.laminate_properties(thicknesses=t_F,
+        #                              angles=angles,
+        #                              stitch=self.pes,
+        #                              t_T=t_T)
 
     @unittest.skip("check test")
     def test_tension_parallel(self):
@@ -278,101 +279,69 @@ class MaterialDTU10MWTestCase(unittest.TestCase):
         self.uniax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
         # lamina properties
         self.uniax.lamina_properties(fvf=0.55)
-
-        # total mass per area of fabric (fibers incl sizing)
+        # total area density of fabric (fibers incl sizing)
         mA_F = 1.2
-        # mass per area of fabric's laminae
+        # area density of fabric's laminae
         mA_Fs = np.array([.95, .05]) * mA_F
         # angles of fabric's laminae
         angles = np.array([0.0, 90.0])
-        # thicknesses of fabric's laminae
-        t_F = mA_Fs / (self.uniax.f.rho * self.uniax.fvf)
-
+        # stitching thread area density
         with_stitching_thread = False
         if with_stitching_thread:
-            # mass per area of stitching thread
+            # area density of stitching thread
             mA_T = 0.012
-            # thickness of stitching thread lamina
-            t_T = mA_T / (self.pes.rho * self.uniax.fvf)
         else:
-            t_T = 0.
-
-        with_sizing = False
-        if with_sizing:
-            # fiber mass fraction
-            psi_F = 0.7151
-            # sizing mass fraction of fibers
-            psi_SF = 0.0055
-            # sizing mass fraction
-            psi_S = psi_SF * mA_F
-            # glass mass fraction
-            psi_Gl = (1 - psi_SF) * mA_F
-            # density of sizing
-            rho_S = 1150.0
-            # density of glass
-            rho_Gl = self.uniax.f.rho
-            # density of fabric
-            rho_F = psi_F / (psi_Gl / rho_Gl + psi_S / rho_S)
-        else:
-            rho_F = self.uniax.f.rho
-        # set fabric density
-        self.uniax.rho_F = rho_F
-
-        # laminate properties
-        self.uniax.laminate_properties(thicknesses=t_F,
-                                       angles=angles,
-                                       stitch=self.pes,
-                                       t_T=t_T)
+            mA_T = 0.
+        psi_SF = 0.0055
+        rho_S = 1150.0
+        self.uniax.laminate_properties(mA_Fs,
+                                       angles,
+                                       mA_T,
+                                       psi_SF,
+                                       rho_S,
+                                       stitch=self.pes)
+        self.uniax.write_laminate_properties('uniax_props.dat')
 
         self.biax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
         # lamina properties
         self.biax.lamina_properties(fvf=0.5)
 
-        # total mass per area of fabric (fibers incl sizing)
+        # total area density of fabric (fibers incl sizing)
         mA_F = 0.6
-        # mass per area of fabric's laminae
+        # area density of fabric's laminae
         mA_Fs = np.array([.5, .5]) * mA_F
         # angles of fabric's laminae
         angles = np.array([-45.0, +45.0])
         # thicknesses of fabric's laminae
-        t_F = mA_Fs / (self.biax.f.rho * self.biax.fvf)
-
-        t_T = 0.
-        rho_F = self.biax.f.rho
-
-        # set fabric density
-        self.biax.rho_F = rho_F
-
+        mA_T = 0.
         # laminate properties
-        self.biax.laminate_properties(thicknesses=t_F,
-                                      angles=angles,
-                                      stitch=self.pes,
-                                      t_T=t_T)
+        self.biax.laminate_properties(mA_Fs,
+                                      angles,
+                                      mA_T,
+                                      psi_SF,
+                                      rho_S,
+                                      stitch=self.pes)
+        self.biax.write_laminate_properties('biax_props.dat')
 
         self.triax = CompositeCFMh(self.eglass, self.epoxy_resin, fu=1.0)
         # lamina properties
         self.triax.lamina_properties(fvf=0.5)
 
-        # total mass per area of fabric (fibers incl sizing)
+        # total area density of fabric (fibers incl sizing)
         mA_F = 0.9
-        # mass per area of fabric's laminae
+        # area density of fabric's laminae
         mA_Fs = np.array([0.3, 0.35, 0.35]) * mA_F
         # angles of fabric's laminae
         angles = np.array([0., -45., +45.])
         # thicknesses of fabric's laminae
-        t_F = mA_Fs / (self.triax.f.rho * self.triax.fvf)
-
-        t_T = 0.
-        rho_F = self.triax.f.rho
-
-        # set fabric density
-        self.triax.rho_F = rho_F
-
-        # laminate properties
-        self.triax.laminate_properties(thicknesses=t_F,
-                                       angles=angles,
-                                       stitch=self.pes,
-                                       t_T=t_T)
+        mA_T = 0.
+        self.triax.laminate_properties(mA_Fs,
+                                       angles,
+                                       mA_T,
+                                       psi_SF,
+                                       rho_S,
+                                       stitch=self.pes)
+        self.triax.write_laminate_properties('triax_props.dat')
 
     def tearDown(self):
         pass

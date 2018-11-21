@@ -272,7 +272,6 @@ class CompositeCFMh(object):
         :param: mA_T: area density of stitching thread in kg/m**2 (float)
         :param: stitch: Fused-wind material object for stitching thread
         '''
-
         self.s = stitch
         # lamina fiber densities
         self.mA_Fs = mA_Fs
@@ -455,7 +454,8 @@ class CompositeCFMh(object):
         ''' Creates a PASTA plate object and determines laminate smeared properties
         '''
         self.pl = Plate(width=0.0)
-        udlayer = self.pl.add_material('udlayer')
+        self.udlayer_name = 'udlayer'
+        udlayer = self.pl.add_material(self.udlayer_name)
 
         udlayer.set_props(E1=self.E1,
                           E2=self.E2,
@@ -477,18 +477,19 @@ class CompositeCFMh(object):
         # add udlayer layers to regions layup
         r = self.pl.regions['region00']
         for thickness, angle in zip(self.t_Fs, self.angles):
-            l = r.add_layer('udlayer')
+            l = r.add_layer(self.udlayer_name)
             l.thickness = np.array([thickness])
             l.angle = np.array([angle])
 
-        stitchingthread = self.pl.add_material('stitchingthread')
-        stitchingthread.set_props_iso(E1=self.s.E1,  # 1.5E+10,
-                                      nu12=self.s.nu12,  # 0.28,
+        self.stitchlayer_name = 'stitchingthread'
+        stitchingthread = self.pl.add_material(self.stitchlayer_name)
+        stitchingthread.set_props_iso(E1=self.s.E1,
+                                      nu12=self.s.nu12,
                                       rho=self.s.rho,
                                       cte1=self.cte1
                                       )
 
-        l = r.add_layer('stitchingthread')
+        l = r.add_layer(self.stitchlayer_name)
         l.thickness = np.array([self.t_T])
         l.angle = np.array([0])
 
@@ -505,7 +506,8 @@ class CompositeCFMh(object):
         self.ctey = self.pl.laminate.a2
         self.ctexy = self.pl.laminate.a12
 
-        # derived properties from lamina (neglecting stitching thread layer)
+        # derived properties from lamina (neglecting stitching thread layer
+        # stiffness)
         self.Ez = self.E3
         use_schuerman = False
         if use_schuerman:
@@ -520,17 +522,39 @@ class CompositeCFMh(object):
         self.Gxz = self.Gxy
         self.nuxz = self.nuxy
 
-    def recover_laminate_stresses(self, elaminate_target):
+    def recover_laminate_stresses(self, elaminate):
+        ''' Recover stress of each lamina by a given strain vector.
+        :param: elaminate: [eps_x, eps_y, eps_z, gamma_yz, gamma_xz, gamma_xy]
+        '''
+        self.nlay = len(self.pl.laminate.plies)
+        sMs = np.zeros((self.nlay, 6))
+        sMes = np.zeros(self.nlay)
+        eMs = np.zeros(self.nlay)
+        for i, (ply, lamina_name)in enumerate(zip(self.pl.laminate.plies,
+                                                  self.pl.regions['region00'].layers.iterkeys())):
+            layer_thick = self.pl.regions['region00'].thick_matrix[0, i]
+            if layer_thick > 0.:
+                if not lamina_name[:-2] == self.stitchlayer_name:
+                    _, sig = ply.calc_loading(elaminate)
+                    sM, sMe, eM, _ = self.matrix_stresses(
+                        sE=sig, sR=np.zeros_like(sig))
+                else:
+                    sM, sMe, eM = np.zeros(6), 0., 0.
+            else:
+                sM, sMe, eM = np.zeros(6), 0., 0.
+            sMs[i, :] = sM
+            sMes[i] = sMe
+            eMs[i] = eM
+        return sMs, sMes, eMs
+
+    def recover_laminate_stresses_coupon_test(self, elaminate_target):
         '''
         elaminate_target should contain only one non-zero entry, whihc is the strain 
         value to be obtained.
         The laminate is loaded such that this strain is obtained.
-
         '''
-        # determine strain vector due to axial loading
-        # F = np.zeros(6)
-        # Fx = F[0] = 1580E+3  # unit load
 
+        # determine strain vector due to axial loading
         from scipy import optimize
         EPS = 1E-12
 
@@ -544,16 +568,7 @@ class CompositeCFMh(object):
         F = f * elaminate_target / (elaminate_target + EPS)
         elaminate = self.pl.laminate.apply_load(F, dT=0.)
 
-        # sMs = np.zeros(len(self.pl.laminate.plies))
-        sMes = np.zeros(len(self.pl.laminate.plies))
-        eMs = np.zeros(len(self.pl.laminate.plies))
-        for i, ply in enumerate(self.pl.laminate.plies):
-            _, sig = ply.calc_loading(elaminate)
-            _, sMe, eM, _ = self.matrix_stresses(sE=sig, sR=np.zeros_like(sig))
-            # sMs[i] = sM
-            sMes[i] = sMe
-            eMs[i] = eM
-        return sMes, eMs
+        return self.recover_laminate_stresses(elaminate)
 
     def matrix_stresses(self, sE, sR, dT=0., dM=0., aMP=0., g_mat_static=1.0):
         ''' stress vector comes in notation:

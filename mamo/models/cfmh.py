@@ -613,24 +613,27 @@ class CompositeCFMh(object):
             sE[3] + sR[3], self.GTTprime, self.f.G23, self.GMTTprime, 1)
 
         # matrix stress vector
-        self.sM = sM = np.array([sM1, sM2, sM3, sM21, sM31, sM23])
+        sM = np.array([sM1, sM2, sM3, sM21,  sM23, sM31])
         # equivalent stress
-        sMe, mode = self._sigma_beltrami()
+        sMe, mode = self.sigma_beltrami(self.m.nu12, sM)
         # stress expusure
         eM = g_mat_static * sMe / self.m.s11_t
         return sM, sMe, eM, mode
 
-    def _sigma_beltrami(self):
+    def sigma_beltrami(self, nu, sM):
         ''' Calculates equivalent stress of the matrix according to Beltrami, 1885, 
         Sulle condizioni di resistenza dei corpi elastici
+        :param: nu: Poisson's ratio of matrix
+        :param: sM: matrix stress vector np.array([sM1, sM2, sM3, sM21,  sM23, sM31])
+        :return: sMe: equivalent stress
+        :return: mode: failure mode
         '''
-        nu = self.m.nu12
-        sigma11 = self.sM[0]
-        sigma22 = self.sM[1]
-        sigma33 = self.sM[2]
-        tau12 = self.sM[3]
-        tau23 = self.sM[5]
-        tau13 = self.sM[4]
+        sigma11 = sM[0]
+        sigma22 = sM[1]
+        sigma33 = sM[2]
+        tau12 = sM[3]
+        tau23 = sM[4]
+        tau13 = sM[5]
 
         # check if normal tension or compression
         sign = np.sign((sigma11 + sigma22 + sigma33) / 3.)
@@ -658,7 +661,6 @@ class CompositeCFMh(object):
         sMe = sign * np.sqrt(sigma11**2 + sigma22**2 + sigma33**2 -
                              2 * nu * (sigma11 * sigma22 + sigma22 * sigma33 + sigma33 * sigma11) +
                              2 * (1 + nu) * (tau12**2 + tau23**2 + tau13**2))
-        # print 'mode = %s' % mode
         return sMe, mode
 
     def fatigue_stress_exposure_incr(self,

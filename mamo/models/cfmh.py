@@ -620,7 +620,8 @@ class CompositeCFMh(object):
         eM = g_mat_static * sMe / self.m.s11_t
         return sM, sMe, eM, mode
 
-    def sigma_beltrami(self, nu, sM):
+    @staticmethod
+    def sigma_beltrami(nu, sM):
         ''' Calculates equivalent stress of the matrix according to Beltrami, 1885, 
         Sulle condizioni di resistenza dei corpi elastici
         :param: nu: Poisson's ratio of matrix

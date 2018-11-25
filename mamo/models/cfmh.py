@@ -522,22 +522,36 @@ class CompositeCFMh(object):
         self.Gxz = self.Gxy
         self.nuxz = self.nuxy
 
-    def recover_laminate_stresses(self, elaminate):
+    def recover_laminate_stresses(self, elaminate, dT=0.):
         ''' Recover stress of each lamina by a given strain vector.
         :param: elaminate: [eps_x, eps_y, eps_z, gamma_yz, gamma_xz, gamma_xy]
+        :param: dT: temperatur difference
         '''
         self.nlay = len(self.pl.laminate.plies)
         sMs = np.zeros((self.nlay, 6))
         sMes = np.zeros(self.nlay)
         eMs = np.zeros(self.nlay)
+        # determine lamina strain
+        eps0, eps1 = self.pl.laminate.apply_load(F=0., dT=dT)
+        # [eps_x, eps_y, eps_z, gamma_yz, gamma_xz, gamma_xy]
+        eps_lamina = np.zeros(6)
+        eps_lamina[0:2] += eps0[0:2]
+        eps_lamina[5] += eps0[2]
+        include_thermal_bending = False
+        if include_thermal_bending:
+            eps_lamina[0:2] += eps1[0:2]
+            eps_lamina[5] += eps1[2]
+        # delta strain
+        deps = eps_lamina - elaminate
+
         for i, (ply, lamina_name)in enumerate(zip(self.pl.laminate.plies,
                                                   self.pl.regions['region00'].layers.iterkeys())):
             layer_thick = self.pl.regions['region00'].thick_matrix[0, i]
             if layer_thick > 0.:
                 if not lamina_name[:-2] == self.stitchlayer_name:
-                    _, sig = ply.calc_loading(elaminate)
+                    _, sig = ply.calc_loading(deps, dT)
                     sM, sMe, eM, _ = self.matrix_stresses(
-                        sE=sig, sR=np.zeros_like(sig))
+                        sE=-sig, sR=np.zeros_like(sig), dT=-dT, neglect_sRTMP3=True)
                 else:
                     sM, sMe, eM = np.zeros(6), 0., 0.
             else:
@@ -570,7 +584,7 @@ class CompositeCFMh(object):
 
         return self.recover_laminate_stresses(elaminate)
 
-    def matrix_stresses(self, sE, sR, dT=0., dM=0., aMP=0., g_mat_static=1.0):
+    def matrix_stresses(self, sE, sR, dT=0., dM=0., aMP=0., g_mat_static=1.0, neglect_sRTMP3=False):
         ''' stress vector comes in notation:
         [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
         :param: sE: external stress
@@ -596,11 +610,17 @@ class CompositeCFMh(object):
         # eq. 15
         def eq_15(u_term_t, b_term_t, c1l_term_t, c2l_term_t, c2u_term_t):
             return u_term_t / (b_term_t * ((np.sqrt(self.twosqrt3fvfpi) /
-                                            c1l_term_t) + ((c2u_term_t - np.sqrt(self.twosqrt3fvfpi)) / c2l_term_t))) - sRTMP
+                                            c1l_term_t) + ((c2u_term_t - np.sqrt(self.twosqrt3fvfpi)) / c2l_term_t)))
 
-        sM2 = eq_15(sE[1] + sR[1], self.ETprime, self.f.E2, self.EMTprime, 1)
-        sM3 = eq_15(
-            sE[2] + sR[2], self.ETprime, self.f.E2, self.EMTprime, np.sqrt(3))
+        sM2 = eq_15(sE[1] + sR[1], self.ETprime,
+                    self.f.E2, self.EMTprime, 1) - sRTMP
+
+        if neglect_sRTMP3:
+            sM3 = eq_15(sE[2] + sR[2], self.ETprime,
+                        self.f.E2, self.EMTprime, np.sqrt(3))
+        else:
+            sM3 = eq_15(sE[2] + sR[2], self.ETprime,
+                        self.f.E2, self.EMTprime, np.sqrt(3)) - sRTMP
 
         # eq. 16
         sM21 = eq_15(

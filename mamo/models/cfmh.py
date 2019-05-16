@@ -277,24 +277,34 @@ class CompositeCFMh(object):
         self.mA_Fs = mA_Fs
         # fiber area density
         self.mA_F = mA_F = np.sum(mA_Fs)
+        # area density of fiber (w/o sizing)
+        self.mA_Gl = mA_F * (1 - psi_SF)
+        # area density of sizing
+        self.mA_S = mA_F * psi_SF
+        # lamina fiber densities (w/o sizing)
+        self.mA_Gls = self.mA_Fs * (1 - psi_SF)
         # stitching thread density
         self.mA_T = mA_T
-        # thickness of laminas (Eq. 3.52)
+        # thickness of laminae (Eq. 3.52)
         self.t_Fs = self.mA_Fs / (self.f.rho * self.fvf)
-        # thickness of laminas (Eq. 3.52)
+        # thickness of laminae (Eq. 3.52)
         self.t_F = self.mA_F / (self.f.rho * self.fvf)
+        # thickness of laminae (w/o sizing) (Eq. 3.52)
+        self.t_Gls = self.mA_Gls / (self.f.rho * self.fvf)
+        # thickness of laminae (w/o sizing) (Eq. 3.52)
+        self.t_Gl = self.mA_Gl / (self.f.rho * self.fvf)
         # thickness of stitching thread lamina (Eq. 3.52)
         self.t_T = self.mA_T / (self.s.rho * self.fvf)
+        # density of sizing
+        self.rho_S = rho_S
+        # thickness of sizing lamina (Eq. 3.52)
+        self.t_S = self.mA_S / (self.rho_S * self.fvf)
         # thickness of laminate
         self.t_tot = self.t_F + self.t_T
         # area density of matrix (derived from Eq. 3.52)
         self.mA_M = (1 - self.fvf) * self.m.rho * self.t_tot
         # area density of fabric
         mA_G = mA_F + mA_T
-        # area density of fiber (w/o sizing)
-        self.mA_Gl = mA_G * (1 - psi_SF) - mA_T
-        # area density of sizing
-        self.mA_S = mA_F * psi_SF
         # laminate area density
         self.mA_tot = mA_G + self.mA_M
         # matrix mass fraction
@@ -307,8 +317,6 @@ class CompositeCFMh(object):
         self.rho_Gl = self.f.rho
         # fiber mass fraction (with sizing)
         psi_F = self.psi_Gl + self.psi_S
-        # density of sizing
-        self.rho_S = rho_S
         # density of fiber (with sizing)
         rho_F = psi_F / (self.psi_Gl / self.rho_Gl + self.psi_S / self.rho_S)
         # stitching thread mass fraction
@@ -384,6 +392,7 @@ class CompositeCFMh(object):
                               'a', 'lamina stiffness properties')
 
         massprop_list = ['fvf',
+                         'mA_F',
                          'mA_Gl',
                          'mA_S',
                          'mA_T',
@@ -399,6 +408,8 @@ class CompositeCFMh(object):
                          'rho_M',
                          'rho_tot',
                          't_Fs',
+                         't_Gls',
+                         't_S',
                          't_T',
                          't_tot'
                          ]
@@ -417,6 +428,7 @@ class CompositeCFMh(object):
                              'nuxz',
                              'ctex',
                              'ctey',
+                             'ctexy'
                              ]
 
         self._write_variables(filename, laminateprop_list,
@@ -476,7 +488,7 @@ class CompositeCFMh(object):
         self.pl.init_regions(1)
         # add udlayer layers to regions layup
         r = self.pl.regions['region00']
-        for thickness, angle in zip(self.t_Fs, self.angles):
+        for thickness, angle in zip(self.t_Gls, self.angles):
             l = r.add_layer(self.udlayer_name)
             l.thickness = np.array([thickness])
             l.angle = np.array([angle])
@@ -509,6 +521,9 @@ class CompositeCFMh(object):
         # derived properties from lamina (neglecting stitching thread layer
         # stiffness)
         self.Ez = self.E3
+        # TODO: calulate ctez from smeared FVF as row of springs
+        # i.e. matrix - fiber - stitching
+        self.ctez = 0.
         use_schuerman = False
         if use_schuerman:
             # Schuermann, p.202, eq. 8.35

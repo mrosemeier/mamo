@@ -263,7 +263,7 @@ class CompositeCFMh(object):
 
         self.cte3 = self.cte2
 
-    def laminate_properties(self, mA_Fs, angles, mA_T, psi_SF, rho_S, stitch):
+    def laminate_properties(self, mA_Fs, angles, mA_T, psi_SF, rho_S, stitch, lam3D=False):
         ''' Calc of laminate properties
         :param: mA_Fs: vector of fiber area density per lamina in kg/m**2 (np.array)
         :param: angles: vector of fiber angles per lamina in deg (np.array)
@@ -272,6 +272,8 @@ class CompositeCFMh(object):
         :param: mA_T: area density of stitching thread in kg/m**2 (float)
         :param: stitch: Fused-wind material object for stitching thread
         '''
+        self.lam3D = lam3D
+
         self.s = stitch
         # lamina fiber densities
         self.mA_Fs = mA_Fs
@@ -386,6 +388,7 @@ class CompositeCFMh(object):
                            'nu13',
                            'cte1',
                            'cte2',
+                           'cte3'
                            ]
 
         self._write_variables(filename, laminaprop_list,
@@ -428,7 +431,10 @@ class CompositeCFMh(object):
                              'nuxz',
                              'ctex',
                              'ctey',
-                             'ctexy'
+                             'ctez',
+                             'ctexy',
+                             'cteyz',
+                             'ctexz',
                              ]
 
         self._write_variables(filename, laminateprop_list,
@@ -505,7 +511,7 @@ class CompositeCFMh(object):
         l.thickness = np.array([self.t_T])
         l.angle = np.array([0])
 
-        self.pl.init_layup(ridx=0, sidx=0, lidx=[])
+        self.pl.init_layup(ridx=0, sidx=0, lidx=[], lam3D=self.lam3D)
         self.pl.laminate.force_symmetric()
         self.pl.laminate.calc_equivalent_modulus()
 
@@ -517,25 +523,36 @@ class CompositeCFMh(object):
         self.ctex = self.pl.laminate.a1
         self.ctey = self.pl.laminate.a2
         self.ctexy = self.pl.laminate.a12
+        if not self.lam3D:
+            # derived properties from lamina (neglecting stitching thread layer
+            # stiffness)
+            self.Ez = self.E3
+            # TODO: calulate ctez from smeared FVF as row of springs
+            # i.e. matrix - fiber - stitching
+            self.ctez = 0.
+            self.cteyz = 0.
+            self.ctexz = 0.
+            use_schuerman = False
+            if use_schuerman:
+                # Schuermann, p.202, eq. 8.35
+                self.Gyz = self.E3 / (2 * (1 + self.nu13))
+            else:
+                # take from lamina
+                self.Gyz = self.G23
+            self.nuyz = self.nu23
 
-        # derived properties from lamina (neglecting stitching thread layer
-        # stiffness)
-        self.Ez = self.E3
-        # TODO: calulate ctez from smeared FVF as row of springs
-        # i.e. matrix - fiber - stitching
-        self.ctez = 0.
-        use_schuerman = False
-        if use_schuerman:
-            # Schuermann, p.202, eq. 8.35
-            self.Gyz = self.E3 / (2 * (1 + self.nu13))
+            # set 13 and 12 planes equal
+            self.Gxz = self.Gxy
+            self.nuxz = self.nuxy
         else:
-            # take from lamina
-            self.Gyz = self.G23
-        self.nuyz = self.nu23
-
-        # set 13 and 12 planes equal
-        self.Gxz = self.Gxy
-        self.nuxz = self.nuxy
+            self.Ez = self.pl.laminate.e3
+            self.ctez = self.pl.laminate.a3
+            self.cteyz = self.pl.laminate.a23
+            self.ctexz = self.pl.laminate.a13
+            self.Gyz = self.pl.laminate.g23
+            self.nuyz = self.pl.laminate.nu23
+            self.Gxz = self.pl.laminate.g13
+            self.nuxz = self.pl.laminate.nu13
 
     def recover_laminate_stresses(self, elaminate, dT=0.):
         ''' Recover stress of each lamina by a given strain vector.

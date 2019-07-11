@@ -574,16 +574,20 @@ class CompositeCFMh(object):
             eps_lamina[0:2] += eps1[0:2]
             eps_lamina[5] += eps1[2]
         # delta strain
-        deps = eps_lamina - elaminate
+        deps = elaminate - eps_lamina
 
         for i, (ply, lamina_name)in enumerate(zip(self.pl.laminate.plies,
                                                   self.pl.regions['region00'].layers.iterkeys())):
             layer_thick = self.pl.regions['region00'].thick_matrix[0, i]
             if layer_thick > 0.:
                 if not lamina_name[:-2] == self.stitchlayer_name:
-                    _, sig = ply.calc_loading(deps, dT)
+                    # _, sig = ply.calc_loading(deps, dT)
+                    _, sig = ply.calc_loading(deps, 0.)
                     sM, sMe, eM, _ = self.matrix_stresses(
-                        sE=-sig, sR=np.zeros_like(sig), dT=-dT, neglect_sRTMP3=True)
+                        sE=sig,
+                        sR=np.zeros_like(sig),
+                        dT=0.,  # dT=dT,
+                        neglect_sRTMP3=True)
                 else:
                     sM, sMe, eM = np.zeros(6), 0., 0.
             else:

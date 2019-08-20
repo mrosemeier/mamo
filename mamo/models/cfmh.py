@@ -515,7 +515,7 @@ class CompositeCFMh(object):
         self.pl.laminate.force_symmetric()
         self.pl.laminate.calc_equivalent_modulus()
 
-        # assign smeared properties to cpmh object
+        # assign smeared properties to cfmh object
         self.Ex = self.pl.laminate.e1
         self.Ey = self.pl.laminate.e2
         self.Gxy = self.pl.laminate.g12

@@ -62,6 +62,7 @@ def smax_stuessi_goodman(n, R=-1, m=10, R_t=1.0, M=1, R_d=30, N_a=1E3):
 
 def xrand_smax_stuessi_goodman(smax_i, N_i, R_i, m_fit, R_t_fit, M_fit, R_d_fit, N_a_fit):
     ''' Random variable x using smax
+    :return: xrand: float value
     '''
     return smax_i - smax_stuessi_goodman(N_i, R_i, m_fit, R_t_fit, M_fit, R_d_fit, N_a_fit)
 
@@ -88,7 +89,7 @@ def x_weibull(p, alp, bet, gam):
 
 def smax_stuessi_goodman_weibull(n, R, m, R_t, M, R_d, N_a, p, alpha, beta, gamma):
     '''
-    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman
+    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient at N_a for R=-1

@@ -1,7 +1,8 @@
 import os
 import numpy as np
 import json
-from mamo.models.sn import fit_stuessi_goodman_weibull, smax_stuessi_goodman_weibull
+from mamo.models.sn import fit_stuessi_goodman_weibull, smax_stuessi_goodman_weibull,\
+    smax_stuessi_goodman
 
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     cyc_data['cyc_ratios'] = cyc_ratios = cyc_stress_min / cyc_stress_max
     cyc_data['cyc_cycles'] = cyc_cycles = data[:, 4]  # N
 
-    grp0 = []  # 9
+    grp0 = range(9)  # 9
     grp1 = range(9, 19)  # 19
 
     cyc_data['grps'] = grps = [item for sublist in [grp0, grp1]
@@ -172,10 +173,10 @@ if __name__ == '__main__':
                               ])
 
     # start values
-    m_start = 10.
-    R_t_start = 60.E+6
-    R_d_start = 10.E+6
-    N_a_start = 1.0E+4
+    m_start = 8.5
+    R_t_start = 67.E+6
+    R_d_start = 9.E+6
+    N_a_start = 68.
 
     m_fit, R_t_fit, R_d_fit, N_a_fit, alp_smax_fit, bet_smax_fit, gam_smax_fit = fit_stuessi_goodman_weibull(cyc_data,
                                                                                                              m_start,
@@ -206,7 +207,7 @@ if __name__ == '__main__':
     #######################################################################
     fig, ax = plt.subplots()
 
-    gidxs = [1]
+    gidxs = [0, 1]
     grps = [grp0, grp1]
     cols = ['k', 'b', 'g', 'r', 'orange', 'm']
 
@@ -214,7 +215,15 @@ if __name__ == '__main__':
 
     lstyle = '-'
     for gidx, grp, col in zip(gidxs, grps, cols):
-        show_p5_p95 = False
+
+        show_fit_wo_weibull = False
+        if show_fit_wo_weibull:
+            smax_sg = smax_stuessi_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit, R_t=R_t_fit, M=M_fit,
+                                           R_d=R_d_fit, N_a=N_a_fit)
+            ax.loglog(ns, smax_sg * 1E-6, linestyle=':', color=col,
+                      label=r'Fit')
+
+        show_p5_p95 = True
         if show_p5_p95:
             p = 0.05
             smax_05 = smax_stuessi_goodman_weibull(
@@ -241,16 +250,48 @@ if __name__ == '__main__':
             ax.loglog(ns, smax_95 * 1E-6, linestyle='--', color=col,
                       label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
-        p = 0.50
+        col = 'r'
         R = -1
+        p = 0.05
+        smax_05 = smax_stuessi_goodman_weibull(
+            ns, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
+            R_d=R_d_fit, N_a=N_a_fit,
+            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+        ax.loglog(ns, smax_05 * 1E-6, linestyle='-.', color=col,
+                  label=r'$P_{\SI{%i}{\percent}}$, $R=$%0.2f' % (p * 100, R))
+
+        print smax_stuessi_goodman_weibull(
+            n=1E5, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
+            R_d=R_d_fit, N_a=N_a_fit,
+            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+
+        p = 0.50
         smax_50 = smax_stuessi_goodman_weibull(
             ns, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
             R_d=R_d_fit, N_a=N_a_fit,
             p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-        ax.loglog(ns, smax_50 * 1E-6, linestyle='--', color=col,
+        ax.loglog(ns, smax_50 * 1E-6, linestyle='-', color=col,
                   label=r'$P_{\SI{%i}{\percent}}$, $R=$%0.2f' % (p * 100, R))
 
-    gidxs = [1, 1]
+        print smax_stuessi_goodman_weibull(
+            n=1E5, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
+            R_d=R_d_fit, N_a=N_a_fit,
+            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+
+        p = 0.95
+        smax_95 = smax_stuessi_goodman_weibull(
+            ns, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
+            R_d=R_d_fit, N_a=N_a_fit,
+            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+        ax.loglog(ns, smax_95 * 1E-6, linestyle='--', color=col,
+                  label=r'$P_{\SI{%i}{\percent}}$, $R=$%0.2f' % (p * 100, R))
+
+        print smax_stuessi_goodman_weibull(
+            n=1E5, R=R, m=m_fit, R_t=R_t_fit, M=M_fit,
+            R_d=R_d_fit, N_a=N_a_fit,
+            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+
+    gidxs = [0, 1]
     for gidx, grp, col in zip(gidxs, grps, cols):
         for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
             ax.loglog(n, s * 1E-6, 'd',

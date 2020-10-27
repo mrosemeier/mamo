@@ -3,46 +3,51 @@ import scipy.optimize as optimize
 from scipy.special import gamma
 
 
-def smax_basquin_goodman(n, R=-1, m=10, R_t=1.0, M=1):
+def smax_basquin_goodman(n, R=-1, m=10, R_t=1.0, M=1, n0=0.0):
     '''
-    Max stress for given cycle number of an SN curve according to Basquin-Goodman
+    Max stress for given cycle number of an SN curve according to
+    Basquin-Goodman
     :param: n: float cycle number
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient
     :param: R_t: float static strength
     :param: M: mean stress sensitivity
+    :param: n0: intersection with smax axis
     :return: smax: float allowable maximum stress
     '''
-    e_max = 2. / ((1. - R) * n**(1. / m) + M * (R + 1))
+    e_max = 2. / ((1. - R) * (n - n0)**(1. / m) + M * (R + 1))
     return R_t * e_max
 
 
-def N_allow_basquin_goodman(smax, R, m, R_t, M):
+def N_allow_basquin_goodman(smax, R, m, R_t, M, n0=0.0):
     '''
-    Allowable cycles for given ma xstress of an SN curve according to Basquin-Goodman
+    Allowable cycles for given ma xstress of an SN curve according to
+    Basquin-Goodman
     :param: smax: float max stress
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient
     :param: R_t: float static strength
     :param: M: mean stress sensitivity
+    :param: n0: intersection with smax axis
     :return: N_allow: float allowable cycles
     '''
     e_max = smax / R_t
-    return ((e_max * M * (R + 1.) - 2.) / (e_max * (R - 1.)))**m
+    return ((e_max * M * (R + 1.) - 2.) / (e_max * (R - 1.)))**m + n0
 
 
 def _b(m, R_d, R_t):
     '''
     Transforms Basquin's m into Stuessi's b
     (1) Derive Basquin for s: dn/ds(s) = -(N_a*m*(s/R_a)**(-m))/s
-    (2) Derive Stuessi for s: dn/ds(s) = -(N_a*b*(R_d-R_t)*((-R_d+s)/(R_t-s))**(-b))/((R_d-s)*(R_t-s))
+    (2) Derive Stuessi for s: dn/ds(s) = -(N_a*b*(R_d-R_t)*
+                                    ((-R_d+s)/(R_t-s))**(-b))/((R_d-s)*(R_t-s))
     (3) Set R_a = 0.5*(R_d+R_t)
     (4) Set (1)=(2) with (3) and solve for b
     '''
     return (m * (-R_d + R_t)) / (2 * (R_d + R_t))
 
 
-def smax_stuessi_goodman(n, R=-1, m=10, R_t=1.0, M=1, R_d=30, N_a=1E3):
+def smax_stuessi_goodman(n, R=-1, m=10, R_t=1.0, M=1, R_d=30, N_a=1E3, n0=0.0):
     '''
     Max stress of an SN curve according to Stuessi-Goodman
     :param: n: float cycle number
@@ -52,12 +57,13 @@ def smax_stuessi_goodman(n, R=-1, m=10, R_t=1.0, M=1, R_d=30, N_a=1E3):
     :param: M: mean stress sensitivity
     :param: R_d: float endurance limit for R=-1
     :param: N_a: float turning point
+    :param: n0: intersection with smax axis
     :return: smax: float allowable maximum stress
     '''
     b = _b(m, R_d, R_t)
-    return (2. * R_t * (R_d * (n / N_a)**(1. / b) + R_t)) / \
-        (-R_t * (-1 + (n / N_a)**(1. / b) * (R - 1) - R *
-                 (M - 1.) - M) + R_d * (n / N_a)**(1. / b) * (1. + R) * M)
+    return (2. * R_t * (R_d * ((n - n0) / N_a)**(1. / b) + R_t)) / \
+        (-R_t * (-1 + ((n - n0) / N_a)**(1. / b) * (R - 1) - R *
+                 (M - 1.) - M) + R_d * ((n - n0) / N_a)**(1. / b) * (1. + R) * M)
 
 
 def xrand_smax_stuessi_goodman(smax_i, N_i, R_i, m_fit, R_t_fit, M_fit, R_d_fit, N_a_fit):

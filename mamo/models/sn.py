@@ -39,7 +39,7 @@ def smax_basquin_goodman(n, R=-1, m=10, Rt=1.0, M=1):
     return Rt * e_max
 
 
-def Nallow_basquin_goodman(smax, R, m, Rt, M):
+def N_basquin_goodman(smax, R, m, Rt, M):
     '''
     Allowable cycles for given ma xstress of an SN curve according to
     Basquin-Goodman
@@ -270,7 +270,7 @@ def fit_basquin_goodman(cyc_data,
                 cyc_data['cyc_ratios'][cyc_data['grps']],
                 cyc_data['cyc_cycles'][cyc_data['grps']]):
             if not R == 1:
-                N = Nallow_basquin_goodman(smax_actual, R, m, Rt, M=1)
+                N = N_basquin_goodman(smax_actual, R, m, Rt, M=1)
             else:
                 N = 1
             crit1 = (np.log10(N) - np.log10(Nactual))**2
@@ -460,7 +460,7 @@ class SNFit(object):
 
     def load_data(self, data, grp_entries):
         '''
-        :param: data: array with test data
+        :param: data: array with test data format: # ID, sigma_a, sigma_m,  ratio , cycles to failure
         :param: grp_entries: list of group entries in data
         '''
         self.cyc_data = {}

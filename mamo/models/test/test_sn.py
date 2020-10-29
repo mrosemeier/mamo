@@ -363,8 +363,8 @@ if __name__ == '__main__':
             if show_fit_wo_weibull:
                 smax_sg = smax_basquin_goodman(
                     ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit)
-                ax.loglog(ns, smax_sg * 1E-6, linestyle=lstyle, color=col,
-                          label=r'Fit')
+                ax.semilogx(ns, smax_sg * 1E-6, linestyle=lstyle, color=col,
+                            label=r'Fit')
 
             show_p5_p95 = True
             if show_p5_p95:
@@ -372,15 +372,15 @@ if __name__ == '__main__':
                 smax_05 = smax_basquin_goodman_weibull(
                     ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
                     p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.loglog(ns, smax_05 * 1E-6, linestyle='-.', color=col,
-                          label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+                ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
+                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
             p = 0.50
             smax_50 = smax_basquin_goodman_weibull(
                 ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
                 p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-            ax.loglog(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                      label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+            ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
+                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
             # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
             # cyc_ratio_grp[gidx]))
 
@@ -389,14 +389,14 @@ if __name__ == '__main__':
                 smax_95 = smax_basquin_goodman_weibull(
                     ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
                     p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.loglog(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                          label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+                ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
+                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
     gidxs = [0, 1]
     for gidx, grp, col in zip(gidxs, grps, cols):
         for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-            ax.loglog(n, s * 1E-6, 'd',
-                      color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
+            ax.semilogx(n, s * 1E-6, 'd',
+                        color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
 
     # place summary box
     textstr = '\n'.join((

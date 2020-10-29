@@ -1,9 +1,7 @@
 import os
 import numpy as np
-from mamo.models.sn import fit_stuessi_goodman_weibull, smax_stuessi_goodman_weibull,\
-    smax_stuessi_goodman, smax_limit_stuessi_goodman_weibull, x_weibull, _b,\
-    fit_basquin_goodman, smax_basquin_goodman, fit_basquin_goodman_weibull,\
-    smax_basquin_goodman_weibull, smax_limit_basquin_goodman_weibull, SNFit
+from mamo.models.sn import smax_stuessi_goodman_weibull, smax_stuessi_goodman,\
+    x_weibull, _b, smax_basquin_goodman, smax_basquin_goodman_weibull, SNFit
 
 import matplotlib as mpl
 from mamo.models.lib import readjson, writejson

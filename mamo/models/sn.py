@@ -480,7 +480,6 @@ class SNFit(object):
         self.cyc_data['grplist'] = grps = []
         for i, ni in enumerate(grp_entries):
             if i == 0:
-                n0 = 0
                 grp = list(np.arange(ni))
                 grps.append(grp)
             else:

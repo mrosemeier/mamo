@@ -512,7 +512,7 @@ class CompositeCFMh(object):
         l.angle = np.array([0])
 
         self.pl.init_layup(ridx=0, sidx=0, lidx=[], lam3D=self.lam3D)
-        self.pl.laminate.force_symmetric()
+        # self.pl.laminate.force_symmetric()
         self.pl.laminate.calc_equivalent_modulus()
 
         # assign smeared properties to cfmh object

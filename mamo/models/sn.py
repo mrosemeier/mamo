@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.optimize as optimize
 from scipy.special import gamma
+from collections import OrderedDict
 
 
 def x_weibull(p, alpha, beta, gamma):
@@ -341,26 +342,6 @@ def fit_basquin_goodman_weibull(cyc_data,
         critsum = np.sum(np.array(crits))  # objective function
         return critsum
 
-        '''
-        for smax_actual, R, Nactual in zip(cyc_data['cyc_stress_max'][cyc_data['grps']],
-                                           cyc_data['cyc_ratios'][cyc_data['grps']],
-                                           cyc_data['cyc_cycles'][cyc_data['grps']]):
-            if not R == 1:
-                N = Nallow_basquin_goodman(smax_actual, R, m, Rt, M=1)
-            else:
-                N = 1
-            crit1 = (np.log10(N) - np.log10(Nactual))**2
-            crits.append(crit1)
-
-            include_sigma_max_fit = True
-            if include_sigma_max_fit:
-                smax = smax_basquin_goodman(Nactual, R, m, Rt, M=1)
-                crit2 = (np.log10(smax) - np.log10(smax_actual))**2
-                crits.append(crit2)
-
-        critsum = np.sum(np.array(crits))  # objective function
-        return critsum
-        '''
     result = optimize.minimize(objective, initial_guess, method='Nelder-Mead')
     if result.success:
         fitted_params = result.x
@@ -447,3 +428,128 @@ def fit_stuessi_goodman_weibull(cyc_data,
     m_fit, Rt_fit, Re_fit, Na_fit = fitted_params
 
     return m_fit, Rt_fit, Re_fit, Na_fit, alp, bet, gam
+
+
+class SNFit(object):
+    '''
+    Fits Basquin- and Stuessi-Goodman type curves to a set of experimental data
+    '''
+
+    def __init__(self, fit_type='basquin_goodman'):
+        '''
+        :param: fit_type: str basquin_goodman or stuessi-goodman
+        '''
+        self.fit_type = fit_type
+        self.sn_fit = OrderedDict()
+
+        if self.fit_type == 'basquin-goodman':
+            self._init_basquin_goodman()
+        elif self.fit_type == 'stuessi-goodman':
+            self._init_stuessi_goodman()
+
+    def _init_basquin_goodman(self):
+        self.m_start = 10.0
+        self.Rt_start = 50.0E+6
+
+    def _init_stuessi_goodman(self):
+        self.m_start = 8.5
+        self.Rt_start = 67.E+6
+        self.Re_start = 9.E+6
+        self.Na_start = 68.
+        self.n0 = 1.
+
+    def load_data(self, data, grp_entries):
+        '''
+        :param: data: array with test data
+        :param: grp_entries: list of group entries in data
+        '''
+        self.cyc_data = {}
+        self.cyc_data['cyc_stress_a'] = cyc_stress_a = abs(data[:, 1])
+        self.cyc_data['cyc_stress_m'] = cyc_stress_m = abs(data[:, 2])
+        cyc_stress_a_sign = np.ones_like(cyc_stress_a)  # np.sign(data[:, 0])
+        cyc_stress_m_sign = np.ones_like(cyc_stress_a)  # np.sign(data[:, 1])
+
+        self.cyc_data['cyc_stress_max'] = cyc_stress_max = cyc_stress_m_sign * cyc_stress_m + \
+            cyc_stress_a  # MPa
+        self.cyc_data['cyc_stress_min'] = cyc_stress_min = cyc_stress_m_sign * cyc_stress_m - \
+            cyc_stress_a  # MPa
+        self.cyc_data['cyc_ratios'] = cyc_ratios = cyc_stress_min / \
+            cyc_stress_max
+        self.cyc_data['cyc_cycles'] = cyc_cycles = data[:, 4]  # N
+
+        self.cyc_data['grplist'] = grps = []
+        for i, ni in enumerate(grp_entries):
+            if i == 0:
+                n0 = 0
+                grp = list(np.arange(ni))
+                grps.append(grp)
+            else:
+                grp0 = grps[i - 1]
+                grp = list(np.arange(grp0[-1] + 1, grp0[-1] + ni + 1))
+                grps.append(grp)
+
+        self.cyc_data['grps'] = [item for sublist in grps
+                                 for item in sublist]
+
+        self.cyc_ratio_grp = np.zeros(len(grps))
+
+        for i, grp in enumerate(grps):
+
+            self.cyc_ratio_grp[i] = np.mean(cyc_ratios[grp])
+
+    def fit_data(self):
+        '''
+        :return: sn_fit: dict with fitting parameters
+        '''
+
+        if self.fit_type == 'basquin-goodman':
+            m, Rt_fit, alpha, beta, gamma =\
+                fit_basquin_goodman_weibull(self.cyc_data,
+                                            self.m_start,
+                                            self.Rt_start)
+
+            Rt_50 = smax_limit_basquin_goodman_weibull(p=0.5,
+                                                       Rt_fit=Rt_fit,
+                                                       alpha=alpha,
+                                                       beta=beta,
+                                                       gamma=gamma)
+
+        elif self.fit_type == 'stuessi-goodman':
+
+            m, Rt_fit, Re_fit, Na, alpha, beta, gamma =\
+                fit_stuessi_goodman_weibull(self.cyc_data,
+                                            self.m_start,
+                                            self.Rt_start,
+                                            self.Re_start,
+                                            self.Na_start,
+                                            self.n0)
+
+            Rt_50, Re_50 = smax_limit_stuessi_goodman_weibull(p=0.5,
+                                                              R=-1,
+                                                              Rt_fit=Rt_fit,
+                                                              M=1,
+                                                              Re_fit=Re_fit,
+                                                              alpha=alpha,
+                                                              beta=beta,
+                                                              gamma=gamma)
+
+            _, Re_50_R = smax_limit_stuessi_goodman_weibull(p=0.5,
+                                                            R=self.cyc_ratio_grp,
+                                                            Rt_fit=Rt_fit,
+                                                            M=1,
+                                                            Re_fit=Re_fit,
+                                                            alpha=alpha,
+                                                            beta=beta,
+                                                            gamma=gamma)
+
+            self.sn_fit['Re_fit'] = Re_fit
+            self.sn_fit['Na'] = Na
+            self.sn_fit['Re_50'] = Re_50
+            self.sn_fit['Re_50_R'] = Re_50_R.tolist()
+
+        self.sn_fit['m'] = m
+        self.sn_fit['Rt_fit'] = Rt_fit
+        self.sn_fit['alpha'] = alpha
+        self.sn_fit['beta'] = beta
+        self.sn_fit['gamma'] = gamma
+        self.sn_fit['Rt_50'] = Rt_50

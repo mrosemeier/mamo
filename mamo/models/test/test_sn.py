@@ -3,7 +3,7 @@ import numpy as np
 from mamo.models.sn import fit_stuessi_goodman_weibull, smax_stuessi_goodman_weibull,\
     smax_stuessi_goodman, smax_limit_stuessi_goodman_weibull, x_weibull, _b,\
     fit_basquin_goodman, smax_basquin_goodman, fit_basquin_goodman_weibull,\
-    smax_basquin_goodman_weibull, smax_limit_basquin_goodman_weibull
+    smax_basquin_goodman_weibull, smax_limit_basquin_goodman_weibull, SNFit
 
 import matplotlib as mpl
 from mamo.models.lib import readjson, writejson
@@ -151,112 +151,55 @@ if __name__ == '__main__':
     path_data = 'data'
     path_file = os.path.join(path_data, fname)
     data = np.loadtxt(path_file, delimiter=',')
+    data[:, 1] = data[:, 1] * 1E+6  # transform to SI
+    data[:, 2] = data[:, 2] * 1E+6  # transform to SI
 
-    cyc_data['cyc_stress_a'] = cyc_stress_a = abs(data[:, 1]) * 1E+6
-    cyc_data['cyc_stress_m'] = cyc_stress_m = abs(data[:, 2]) * 1E+6
-    cyc_stress_a_sign = np.ones_like(cyc_stress_a)  # np.sign(data[:, 0])
-    cyc_stress_m_sign = np.ones_like(cyc_stress_a)  # np.sign(data[:, 1])
+    grp_entries = [9, 10]
 
-    cyc_data['cyc_stress_max'] = cyc_stress_max = cyc_stress_m_sign * cyc_stress_m + \
-        cyc_stress_a  # MPa
-    cyc_data['cyc_stress_min'] = cyc_stress_min = cyc_stress_m_sign * cyc_stress_m - \
-        cyc_stress_a  # MPa
-    cyc_data['cyc_ratios'] = cyc_ratios = cyc_stress_min / cyc_stress_max
-    cyc_data['cyc_cycles'] = cyc_cycles = data[:, 4]  # N
-
-    grp0 = range(9)  # 9
-    grp1 = range(9, 19)  # 19
-
-    cyc_data['grps'] = grps = [item for sublist in [grp0, grp1]
-                               for item in sublist]
-
-    cyc_ratio_grp = np.array([np.mean(cyc_ratios[grp0]),
-                              np.mean(cyc_ratios[grp1]),
-                              ])
-
-    m_start = 10.0
-    Rt_start = 50.0E+6
-
-    m_fit_bg, Rt_fit_bg = fit_basquin_goodman(cyc_data,
-                                              m_start,
-                                              Rt_start)
-
-    m_fit_bgw, Rt_fit_bgw, alp_smax_fit_bgw, bet_smax_fit_bgw, gam_smax_fit_bgw =\
-        fit_basquin_goodman_weibull(cyc_data,
-                                    m_start,
-                                    Rt_start)
-
-    Rt_50_bgw = smax_limit_basquin_goodman_weibull(p=0.5,
-                                                   Rt_fit=Rt_fit_bgw,
-                                                   alpha=alp_smax_fit_bgw,
-                                                   beta=bet_smax_fit_bgw,
-                                                   gamma=gam_smax_fit_bgw)
-
-    # start values
-    m_start = 8.5
-    Rt_start = 67.E+6
-    Re_start = 9.E+6
-    Na_start = 68.
-    n0 = 1.
-
-    m_fit, Rt_fit, Re_fit, Na_fit, alp_smax_fit, bet_smax_fit, gam_smax_fit =\
-        fit_stuessi_goodman_weibull(cyc_data,
-                                    m_start,
-                                    Rt_start,
-                                    Re_start,
-                                    Na_start,
-                                    n0)
-
-    Rt_50, Re_50 = smax_limit_stuessi_goodman_weibull(p=0.5,
-                                                      R=-1,
-                                                      Rt_fit=Rt_fit,
-                                                      M=1,
-                                                      Re_fit=Re_fit,
-                                                      alpha=alp_smax_fit,
-                                                      beta=bet_smax_fit,
-                                                      gamma=gam_smax_fit)
-
-    _, Re_50_R = smax_limit_stuessi_goodman_weibull(p=0.5,
-                                                    R=cyc_ratio_grp,
-                                                    Rt_fit=Rt_fit,
-                                                    M=1,
-                                                    Re_fit=Re_fit,
-                                                    alpha=alp_smax_fit,
-                                                    beta=bet_smax_fit,
-                                                    gamma=gam_smax_fit)
-
-    sn_fit = {}
-    sn_fit['stuessi_goodman'] = {}
-    sn_fit['stuessi_goodman']['m_fit'] = m_fit
-    sn_fit['stuessi_goodman']['R_fit'] = Rt_fit
-    sn_fit['stuessi_goodman']['Re_fit'] = Re_fit
-    sn_fit['stuessi_goodman']['Na_fit'] = Na_fit
-    sn_fit['stuessi_goodman']['alp_smax_fit'] = alp_smax_fit
-    sn_fit['stuessi_goodman']['bet_smax_fit'] = bet_smax_fit
-    sn_fit['stuessi_goodman']['gam_smax_fit'] = gam_smax_fit
-    sn_fit['stuessi_goodman']['Rt_50'] = Rt_50
-    sn_fit['stuessi_goodman']['Re_50'] = Re_50
-
-    writejson(sn_fit, 'sn_fit_rev.json')
-
-    sn_fit_rd = readjson('sn_fit_rev.json')
+    #######################################################################
+    snf = SNFit(fit_type='stuessi-goodman')
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = 8.5
+    snf.Rt_start = 67.E+6
+    snf.Re_start = 9.E+6
+    snf.Na_start = 68.
+    snf.fit_data()
+    writejson(snf.sn_fit, 'sn_fit_sg.json')
+    sn_fit_sg = readjson('sn_fit_sg.json')
 
     exp_start = 0  # 10^0
     exp_end = 7  # 10^7
     ns = np.logspace(exp_start, exp_end, 1E3)
+
+    gidxs = [0, 1]
+
+    cols = ['k', 'b', 'g', 'r', 'orange', 'm']
+
+    M_fit = 1
+    lstyle = '-'
+
+    grps = snf.cyc_data['grplist']
+    cyc_stress_max = snf.cyc_data['cyc_stress_max']
+    cyc_cycles = snf.cyc_data['cyc_cycles']
+    cyc_ratio_grp = snf.cyc_ratio_grp
+    m_fit = snf.sn_fit['m']
+    Rt_fit = snf.sn_fit['Rt_fit']
+    Re_fit = snf.sn_fit['Re_fit']
+    Na_fit = snf.sn_fit['Na']
+    alp_smax_fit = snf.sn_fit['alpha']
+    bet_smax_fit = snf.sn_fit['beta']
+    gam_smax_fit = snf.sn_fit['gamma']
+    Rt_50 = snf.sn_fit['Rt_50']
+    Re_50 = snf.sn_fit['Re_50']
+    Re_50_R = snf.sn_fit['Re_50_R']
+    n0 = snf.n0
 
     #######################################################################
     figname = 'cyclic_sn_stuessi_goodman'
     #######################################################################
     fig, ax = plt.subplots()
 
-    gidxs = [0, 1]
-    grps = [grp0, grp1]
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm']
-
-    M_fit = 1
-
-    lstyle = '-'
     for gidx, grp, col in zip(gidxs, grps, cols):
 
         if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
@@ -389,17 +332,31 @@ if __name__ == '__main__':
     plt.close(fig)
 
     #######################################################################
+    snf = SNFit(fit_type='basquin-goodman')
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = 10.0
+    snf.Rt_start = 50.0E+6
+    snf.fit_data()
+    writejson(snf.sn_fit, 'sn_fit_bg.json')
+    sn_fit_bg = readjson('sn_fit_bg.json')
+
+    grps = snf.cyc_data['grplist']
+    cyc_stress_max = snf.cyc_data['cyc_stress_max']
+    cyc_cycles = snf.cyc_data['cyc_cycles']
+    cyc_ratio_grp = snf.cyc_ratio_grp
+    m_fit = snf.sn_fit['m']
+    Rt_fit = snf.sn_fit['Rt_fit']
+    alp_smax_fit = snf.sn_fit['alpha']
+    bet_smax_fit = snf.sn_fit['beta']
+    gam_smax_fit = snf.sn_fit['gamma']
+    Rt_50 = snf.sn_fit['Rt_50']
+
+    #######################################################################
     figname = 'cyclic_sn_basquin_goodman'
     #######################################################################
     fig, ax = plt.subplots()
 
-    gidxs = [0, 1]
-    grps = [grp0, grp1]
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm']
-
-    M_fit = 1
-
-    lstyle = '-'
     for gidx, grp, col in zip(gidxs, grps, cols):
 
         if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
@@ -407,7 +364,7 @@ if __name__ == '__main__':
             show_fit_wo_weibull = False
             if show_fit_wo_weibull:
                 smax_sg = smax_basquin_goodman(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit_bg, Rt=Rt_fit_bg, M=M_fit)
+                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit)
                 ax.loglog(ns, smax_sg * 1E-6, linestyle=lstyle, color=col,
                           label=r'Fit')
 
@@ -415,15 +372,15 @@ if __name__ == '__main__':
             if show_p5_p95:
                 p = 0.05
                 smax_05 = smax_basquin_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit_bgw, Rt_fit=Rt_fit_bgw, M=M_fit,
-                    p=p, alpha=alp_smax_fit_bgw, beta=bet_smax_fit_bgw, gamma=gam_smax_fit_bgw)
+                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
                 ax.loglog(ns, smax_05 * 1E-6, linestyle='-.', color=col,
                           label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
             p = 0.50
             smax_50 = smax_basquin_goodman_weibull(
-                ns, R=cyc_ratio_grp[gidx], m=m_fit_bgw, Rt_fit=Rt_fit_bgw, M=M_fit,
-                p=p, alpha=alp_smax_fit_bgw, beta=bet_smax_fit_bgw, gamma=gam_smax_fit_bgw)
+                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
             ax.loglog(ns, smax_50 * 1E-6, linestyle='-', color=col,
                       label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
             # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
@@ -432,8 +389,8 @@ if __name__ == '__main__':
             if show_p5_p95:
                 p = 0.95
                 smax_95 = smax_basquin_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit_bgw, Rt_fit=Rt_fit_bgw, M=M_fit,
-                    p=p, alpha=alp_smax_fit_bgw, beta=bet_smax_fit_bgw, gamma=gam_smax_fit_bgw)
+                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
                 ax.loglog(ns, smax_95 * 1E-6, linestyle='--', color=col,
                           label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
@@ -445,14 +402,14 @@ if __name__ == '__main__':
 
     # place summary box
     textstr = '\n'.join((
-        r'$m=%.2f$' % (m_fit_bgw),
+        r'$m=%.2f$' % (m_fit),
         r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_fit_bgw * 1E-6),
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit_bgw),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit_bgw),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit_bgw),
+            Rt_fit * 1E-6),
+        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
+        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
+        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
         r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50_bgw * 1E-6)
+            Rt_50 * 1E-6)
 
     ))
 

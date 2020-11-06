@@ -2,10 +2,13 @@ import os
 import numpy as np
 from mamo.models.sn import smax_stuessi_goodman_weibull, smax_stuessi_goodman,\
     x_weibull, _b, smax_basquin_goodman, smax_basquin_goodman_weibull, SNFit,\
-    N_smax_stuessi_goodman_weibull, sa_smax, sm, sa_stuessi_weibull, CLDFit
+    N_smax_stuessi_goodman_weibull, sa_smax, sm, sa_stuessi_weibull, CLDFit,\
+    p_weibull, s_weibull
 
 import matplotlib as mpl
 from mamo.models.lib import readjson, writejson
+import shutil
+from collections import OrderedDict
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['text.latex.unicode'] = True
 mpl.rcParams['text.latex.preamble'] = [
@@ -140,16 +143,15 @@ def _lab(pi, lab):
     return label
 
 
-def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True, show_p5_p95=True, cldf=[]):
+def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True, cldf=[]):
 
-    writejson(snf.sn_fit, 'sn_fit_sg.json')
-    sn_fit_sg = readjson('sn_fit_sg.json')
+    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_sg.json'))
 
     exp_start = 0  # 10^0
     exp_end = 7  # 10^7
     ns = np.logspace(exp_start, exp_end, 1E3)
 
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm']
+    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
 
     M_fit = 1
     lstyle = '-'
@@ -158,7 +160,8 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
     cyc_stress_max = snf.cyc_data['cyc_stress_max']
     cyc_cycles = snf.cyc_data['cyc_cycles']
     cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m']
+    m_fit = snf.sn_fit['m_fit']
+    m_50 = snf.sn_fit['m_50']
     Rt_fit = snf.sn_fit['Rt_fit']
     Re_fit = snf.sn_fit['Re_fit']
     Na_fit = snf.sn_fit['Na']
@@ -173,8 +176,13 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
     #gidxs = [0, 1, 2, 3]
     gidxs = range(len(grps))
 
+    if cldf:
+        sfx = '_stuessi'
+    else:
+        sfx = '_weibull'
+
     #######################################################################
-    figname = fname + '_' + 'sn_stuessi_goodman'
+    figname = fname + '_' + 'sn_stuessi_goodman' + sfx
     #######################################################################
     fig, ax = plt.subplots()
 
@@ -235,7 +243,7 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
                     cyc_stress_max_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_stress_max']
                     cyc_cycles_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_cycles']
                     cyc_ratio_grp_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_ratio_grp']
-                    m_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['m']
+                    m_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['m_fit']
                     Rt_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_fit']
                     Re_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_fit']
                     Na_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Na']
@@ -262,16 +270,17 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
 
     # place summary box
     textstr = '\n'.join((
-        r'$m=%.2f$' % (m_fit),
+        r'$m_\text{fit}=%.2f$' % (m_fit),
         r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Rt_fit * 1E-6),
         r'$R^\text{e}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Re_fit * 1E-6),
         r'$N_\text{a}=%i$' % (Na_fit),
         r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
         r'$\beta=\num{%.2E}$' % (bet_smax_fit),
         r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
+        r'$m^{R=-1}_{p=\SI{50}{\percent}}=%.2f$' % (m_50),
         r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
             Rt_50 * 1E-6),
-        r'$R^{\text{e},R=-1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
+        r'$R^{\text{e},R=-1}_{p=\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
             Re_50 * 1E-6)
     ))  # ,r'$R^{\text{e},R=0.1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
     #     Re_50_R[gidx] * 1E-6)
@@ -279,7 +288,7 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
     # these are matplotlib.patch.Patch properties
     props = dict(facecolor='white', edgecolor='black')
 
-    if sntextbox:
+    if textbox:
         # place a text box in upper left in axes coords
         ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=5,
                 verticalalignment='top', horizontalalignment='right',
@@ -297,32 +306,28 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, sntextbox=True,
     import matplotlib.ticker as ticker
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder='', figname=figname)
+    savefig(fig, folder=folder, figname=figname)
     plt.close(fig)
 
 
-def post_basquin_godmann(fname, snf, ylim=[10, 80], legend=True, sntextbox=True):
+def post_basquin_godmann(fname, snf, ylim=[10, 80], legend=True, textbox=True):
 
-    writejson(snf.sn_fit, 'sn_fit_bg.json')
-    sn_fit_bg = readjson('sn_fit_bg.json')
+    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_bg.json'))
 
     exp_start = 0  # 10^0
     exp_end = 7  # 10^7
     ns = np.logspace(exp_start, exp_end, 1E3)
 
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm']
+    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
 
     M_fit = 1
     lstyle = '-'
-
-    writejson(snf.sn_fit, 'sn_fit_bg.json')
-    sn_fit_bg = readjson('sn_fit_bg.json')
 
     grps = snf.cyc_data['grplist']
     cyc_stress_max = snf.cyc_data['cyc_stress_max']
     cyc_cycles = snf.cyc_data['cyc_cycles']
     cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m']
+    m_fit = snf.sn_fit['m_fit']
     Rt_fit = snf.sn_fit['Rt_fit']
     alp_smax_fit = snf.sn_fit['alpha']
     bet_smax_fit = snf.sn_fit['beta']
@@ -412,7 +417,7 @@ def post_basquin_godmann(fname, snf, ylim=[10, 80], legend=True, sntextbox=True)
     # these are matplotlib.patch.Patch properties
     props = dict(facecolor='white', edgecolor='black')
 
-    if sntextbox:
+    if textbox:
         # place a text box in upper left in axes coords
         ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=5,
                 verticalalignment='top', horizontalalignment='right',
@@ -430,7 +435,7 @@ def post_basquin_godmann(fname, snf, ylim=[10, 80], legend=True, sntextbox=True)
     import matplotlib.ticker as ticker
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder='', figname=figname)
+    savefig(fig, folder=folder, figname=figname)
     plt.close(fig)
 
 
@@ -439,8 +444,8 @@ def post_cld_fit(fname, cldf, grp_entries_list, snf=[]):
     ns = cldf.ns
 
     for i, _ in enumerate(grp_entries_list):
-        writejson(cldf.sn_grp[i]['sn_fit'], fname +
-                  '_' + 'sn_fit' + '_%02d' % i)
+        writejson(cldf.sn_grp[i]['sn_fit'], os.path.join(folder, fname +
+                                                         '_' + 'sn_fit' + '_%02d' % i))
 
     #######################################################################
     figname = fname + '_' + 'cld_fit'
@@ -459,122 +464,269 @@ def post_cld_fit(fname, cldf, grp_entries_list, snf=[]):
     ax.set_ylabel(sa_label)
     ax.set_xlabel(sm_label)
     ax.legend()
-    savefig(fig, folder='', figname=figname)
+    savefig(fig, folder=folder, figname=figname)
     plt.close(fig)
 
-    for i, _ in enumerate(grp_entries_list):
+    plot_stuessi = False
+    if plot_stuessi:
+        for i, _ in enumerate(grp_entries_list):
 
-        gidxs = [0, 1]
+            gidxs = [0, 1]
 
-        cols = ['k', 'b', 'g', 'r', 'orange', 'm']
+            cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
 
-        M_fit = 1
-        lstyle = '-'
+            M_fit = 1
+            lstyle = '-'
 
-        grps = cldf.sn_grp[i]['cyc_data']['grplist']
-        cyc_stress_max = cldf.sn_grp[i]['cyc_data']['cyc_stress_max']
-        cyc_cycles = cldf.sn_grp[i]['cyc_data']['cyc_cycles']
-        cyc_ratio_grp = cldf.sn_grp[i]['cyc_data']['cyc_ratio_grp']
-        m_fit = cldf.sn_grp[i]['sn_fit']['m']
-        Rt_fit = cldf.sn_grp[i]['sn_fit']['Rt_fit']
-        Re_fit = cldf.sn_grp[i]['sn_fit']['Re_fit']
-        Na_fit = cldf.sn_grp[i]['sn_fit']['Na']
-        alp_smax_fit = cldf.sn_grp[i]['sn_fit']['alpha']
-        bet_smax_fit = cldf.sn_grp[i]['sn_fit']['beta']
-        gam_smax_fit = cldf.sn_grp[i]['sn_fit']['gamma']
-        Rt_50 = cldf.sn_grp[i]['sn_fit']['Rt_50']
-        Re_50 = cldf.sn_grp[i]['sn_fit']['Re_50']
-        Re_50_R = cldf.sn_grp[i]['sn_fit']['Re_50_R']
-        n0 = cldf.n0
+            grps = cldf.sn_grp[i]['cyc_data']['grplist']
+            cyc_stress_max = cldf.sn_grp[i]['cyc_data']['cyc_stress_max']
+            cyc_cycles = cldf.sn_grp[i]['cyc_data']['cyc_cycles']
+            cyc_ratio_grp = cldf.sn_grp[i]['cyc_data']['cyc_ratio_grp']
+            m_fit = cldf.sn_grp[i]['sn_fit']['m_fit']
+            Rt_fit = cldf.sn_grp[i]['sn_fit']['Rt_fit']
+            Re_fit = cldf.sn_grp[i]['sn_fit']['Re_fit']
+            Na_fit = cldf.sn_grp[i]['sn_fit']['Na']
+            alp_smax_fit = cldf.sn_grp[i]['sn_fit']['alpha']
+            bet_smax_fit = cldf.sn_grp[i]['sn_fit']['beta']
+            gam_smax_fit = cldf.sn_grp[i]['sn_fit']['gamma']
+            Rt_50 = cldf.sn_grp[i]['sn_fit']['Rt_50']
+            Re_50 = cldf.sn_grp[i]['sn_fit']['Re_50']
+            Re_50_R = cldf.sn_grp[i]['sn_fit']['Re_50_R']
+            n0 = cldf.n0
 
-        #######################################################################
-        figname = fname + '_' + 'cyclic_sn_stuessi_%02d' % i
-        #######################################################################
-        fig, ax = plt.subplots()
+            ###################################################################
+            figname = fname + '_' + 'cyclic_sn_stuessi_%02d' % i
+            ###################################################################
+            fig, ax = plt.subplots()
 
-        for gidx, grp, col in zip(gidxs, grps, cols):
+            for gidx, grp, col in zip(gidxs, grps, cols):
 
-            if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
+                if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
 
-                show_fit_wo_weibull = False
-                if show_fit_wo_weibull:
-                    smax_sg = smax_stuessi_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit,
-                                                   Re=Re_fit, Na=Na_fit)
-                    ax.semilogx(ns, smax_sg * 1E-6, linestyle=':', color=col,
-                                label=r'Fit')
+                    show_fit_wo_weibull = False
+                    if show_fit_wo_weibull:
+                        smax_sg = smax_stuessi_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit,
+                                                       Re=Re_fit, Na=Na_fit)
+                        ax.semilogx(ns, smax_sg * 1E-6, linestyle=':', color=col,
+                                    label=r'Fit')
 
-                show_p5_p95 = True
-                if show_p5_p95:
-                    p = 0.05
-                    smax_05 = sa_stuessi_weibull(
+                    show_p5_p95 = True
+                    if show_p5_p95:
+                        p = 0.05
+                        smax_05 = sa_stuessi_weibull(
+                            ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                            Re_fit=Re_fit, Na=Na_fit,
+                            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
+                        ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
+                                    label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+
+                    p = 0.50
+                    smax_50 = sa_stuessi_weibull(
                         ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
                         Re_fit=Re_fit, Na=Na_fit,
                         p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                    ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
+                    ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
                                 label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+                    # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
+                    # cyc_ratio_grp[gidx]))
 
-                p = 0.50
-                smax_50 = sa_stuessi_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                    Re_fit=Re_fit, Na=Na_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-                # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
-                # cyc_ratio_grp[gidx]))
+                    if show_p5_p95:
+                        p = 0.95
+                        smax_95 = sa_stuessi_weibull(
+                            ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                            Re_fit=Re_fit, Na=Na_fit,
+                            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
+                        ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
+                                    label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
 
-                if show_p5_p95:
-                    p = 0.95
-                    smax_95 = sa_stuessi_weibull(
-                        ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                        Re_fit=Re_fit, Na=Na_fit,
-                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                    ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                                label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+            for gidx, grp, col in zip(gidxs, grps, cols):
+                for j, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
+                    ax.semilogx(n, s * 1E-6, 'd',
+                                color=col,  label=_lab(j, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
 
-        for gidx, grp, col in zip(gidxs, grps, cols):
-            for j, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-                ax.semilogx(n, s * 1E-6, 'd',
-                            color=col,  label=_lab(j, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
+            # place summary box
+            textstr = '\n'.join((
+                r'$m=%.2f$' % (m_fit),
+                r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
+                    Rt_fit * 1E-6),
+                r'$R^\text{e}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
+                    Re_fit * 1E-6),
+                r'$N_\text{a}=%i$' % (Na_fit),
+                r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
+                r'$\beta=\num{%.2E}$' % (bet_smax_fit),
+                r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
+                r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
+                    Rt_50 * 1E-6),
+                r'$R^{\text{e},R=-1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
+                    Re_50 * 1E-6),
+                r'$R^{\text{e},R=0.1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
+                    Re_50_R[1] * 1E-6)
+            ))
 
-        # place summary box
-        textstr = '\n'.join((
-            r'$m=%.2f$' % (m_fit),
-            r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
-                Rt_fit * 1E-6),
-            r'$R^\text{e}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
-                Re_fit * 1E-6),
-            r'$N_\text{a}=%i$' % (Na_fit),
-            r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-            r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-            r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-            r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-                Rt_50 * 1E-6),
-            r'$R^{\text{e},R=-1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-                Re_50 * 1E-6),
-            r'$R^{\text{e},R=0.1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-                Re_50_R[1] * 1E-6)
-        ))
+            # these are matplotlib.patch.Patch properties
+            props = dict(facecolor='white', edgecolor='black')
 
-        # these are matplotlib.patch.Patch properties
-        props = dict(facecolor='white', edgecolor='black')
+            # place a text box in upper left in axes coords
+            ax.text(0.6, 0.95, textstr, transform=ax.transAxes, fontsize=6,
+                    verticalalignment='top', bbox=props)
 
+            ax.set_ylabel(stress_max_label)
+            ax.set_xlabel(n_label)
+            ax.set_ylim(10, 80)
+            ax.set_xlim(None, None)
+            #ax.legend(ncol=1, loc='lower left')
+            ax.set_yticks(ticks=np.array(
+                [10, 20, 30, 40, 50, 60, 70, 80]), minor=False)
+            import matplotlib.ticker as ticker
+            ax.yaxis.set_major_formatter(
+                ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+            savefig(fig, folder=folder, figname=figname)
+            plt.close(fig)
+
+
+def post_weibull(fname, snf, legend=True, textbox=True):
+
+    p_label = r'Probability $P$'
+    Rt_label = r'Static strength $R^\text{t}$ in \si{\mega\pascal}'
+
+    Rt_fit = snf.sn_fit['Rt_fit']
+    alpha = snf.sn_fit['alpha']
+    beta = snf.sn_fit['beta']
+    gamma = snf.sn_fit['gamma']
+    xs = snf.sn_fit['xs']
+
+    x_min_ = x_weibull(0.001, alpha, beta, gamma)
+    x_max_ = x_weibull(0.999, alpha, beta, gamma)
+    xs_min_ = np.min(xs)
+    xs_max_ = np.max(xs)
+
+    xs_min = np.min([x_min_, xs_min_])
+    xs_max = np.max([x_max_, xs_max_])
+
+    mu, Rt_sig = s_weibull(alpha, beta, gamma)
+
+    Rt_mean = mu + Rt_fit
+
+    x = np.linspace(xs_min, xs_max, 1E3)
+    p_fit = p_weibull(x, alpha, beta, gamma)
+
+    #plt.plot((x + Rt_fit) * 1E-6, ps_fit)
+    #plt.plot((xs + Rt_fit) * 1E-6, p_weibull(xs, alpha, beta, gamma), 'd')
+
+    grps = snf.cyc_data['grplist']
+    cyc_stress_max = snf.cyc_data['cyc_stress_max']
+    cyc_cycles = snf.cyc_data['cyc_cycles']
+    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
+    Rt_fit = snf.sn_fit['Rt_fit']
+    alp_smax_fit = snf.sn_fit['alpha']
+    bet_smax_fit = snf.sn_fit['beta']
+    gam_smax_fit = snf.sn_fit['gamma']
+    Rt_50 = snf.sn_fit['Rt_50']
+
+    #gidxs = [0, 1, 2, 3]
+    gidxs = range(len(grps))
+
+    #######################################################################
+    figname = fname + '_' + 'p_weibull'
+    #######################################################################
+    fig, ax = plt.subplots()
+
+    ax.plot((x + Rt_fit) * 1E-6, p_fit, 'k',
+            label=r'$P\left(\alpha, \beta, \gamma\right)$')
+
+    count = 0
+    for gidx, grp in zip(gidxs, grps):
+        col = next(ax._get_lines.prop_cycler)['color']
+
+        for i, _ in enumerate(cyc_stress_max[grp]):
+            xi = xs[count]
+            pi = p_weibull(xi, alpha, beta, gamma)
+            ax.plot((xi + Rt_fit) * 1E-6, pi, 'd',
+                    color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
+            count += 1
+    # place summary box
+    textstr = '\n'.join((
+        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
+        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
+        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
+        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
+            Rt_50 * 1E-6),
+        r'$R^\text{t}_\text{mean}=\SI{%.2f}{\mega\pascal}$' % (
+            Rt_mean * 1E-6),
+        r'$R^\text{t}_{\sigma}=\SI{%.2f}{\mega\pascal}$' % (
+            Rt_sig * 1E-6)
+    ))
+
+    # these are matplotlib.patch.Patch properties
+    props = dict(facecolor='white', edgecolor='black')
+
+    if textbox:
         # place a text box in upper left in axes coords
-        ax.text(0.6, 0.95, textstr, transform=ax.transAxes, fontsize=6,
-                verticalalignment='top', bbox=props)
+        ax.text(0.03, 0.96, textstr, transform=ax.transAxes, fontsize=5,
+                verticalalignment='top', horizontalalignment='left',
+                bbox=props)
 
-        ax.set_ylabel(stress_max_label)
-        ax.set_xlabel(n_label)
-        ax.set_ylim(10, 80)
-        ax.set_xlim(None, None)
-        #ax.legend(ncol=1, loc='lower left')
-        ax.set_yticks(ticks=np.array(
-            [10, 20, 30, 40, 50, 60, 70, 80]), minor=False)
-        import matplotlib.ticker as ticker
-        ax.yaxis.set_major_formatter(
-            ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-        savefig(fig, folder='', figname=figname)
-        plt.close(fig)
+    ax.set_ylabel(p_label)
+    ax.set_xlabel(Rt_label)
+    #ax.set_ylim(ylim[0], ylim[1])
+    #ax.set_xlim(None, None)
+    if legend:
+        ax.legend(ncol=1, loc='lower right')
+    savefig(fig, folder=folder, figname=figname)
+    plt.close(fig)
+
+
+def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
+    #######################################################################
+    snf = SNFit(fit_type='stuessi-goodman')
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.Re_start = cfg['Re_start']
+    snf.Na_start = cfg['Na_start']
+    snf.fit_data()
+
+    exp_start = 0  # 10^0
+    exp_end = 7  # 10^7
+    npoint = cfg['npoint']
+    ns = np.logspace(exp_start, exp_end, npoint)
+
+    snf.cld(ns)
+
+    #######################################################################
+    cldf = CLDFit()
+    #######################################################################
+
+    cldf.m_start = cfg['m_start']
+    cldf.Rt_start = cfg['Rt_start']
+    cldf.Re_start = cfg['Re_start']
+    cldf.Na_start = cfg['Na_start']
+    cldf.fit_data_groups(ns, data, grp_entries_list)
+
+    #######################################################################
+    # Post Stuessi-Goodman
+    #######################################################################
+    ylim = cfg['ylim']
+    legend = False
+    textbox = True
+    show_p5_p95 = False
+    post_stuessi_goodman(fname, snf, ylim, legend,
+                         textbox, show_p5_p95, cldf)
+    post_stuessi_goodman(fname, snf, ylim, legend,
+                         textbox, show_p5_p95=True)
+    post_cld_fit(fname, cldf, grp_entries_list, snf)
+    post_weibull(fname, snf, legend=True, textbox=True)
+
+    #######################################################################
+    snf = SNFit(fit_type='basquin-goodman')
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.fit_data()
+
+    post_basquin_godmann(fname, snf, ylim, legend, textbox)
 
 
 def fit_basquin_stuessi_spabond(npoint=8):
@@ -594,53 +746,19 @@ def fit_basquin_stuessi_spabond(npoint=8):
 
     grp_entries = [grp0_ids, grp1_ids, grp2_ids, grp3_ids]
 
-    #######################################################################
-    snf = SNFit(fit_type='stuessi-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 6.0
-    snf.Rt_start = 40.E+6
-    snf.Re_start = 20.E+6
-    snf.Na_start = 1E3
-    snf.fit_data()
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    ns = np.logspace(exp_start, exp_end, npoint)
-
-    snf.cld(ns)
-
-    #######################################################################
-    cldf = CLDFit()
-    #######################################################################
-
     grp_entries_list = [[grp0_ids, grp1_ids],
                         [grp0_ids, grp2_ids],
                         [grp0_ids, grp3_ids]]
 
-    cldf.m_start = 6.0
-    cldf.Rt_start = 40.E+6
-    cldf.Re_start = 15.E+6
-    cldf.Na_start = 1E3
-    cldf.fit_data_groups(ns, data, grp_entries_list)
+    cfg = OrderedDict()
+    cfg['m_start'] = 6.0
+    cfg['Rt_start'] = 40.E+6
+    cfg['Re_start'] = 20.E+6
+    cfg['Na_start'] = 1E2
+    cfg['ylim'] = [10, 60]
+    cfg['npoint'] = npoint
 
-    ylim = [10, 60]
-    legend = False
-    sntextbox = True
-    show_p5_p95 = False
-    post_stuessi_goodman(fname, snf, ylim, legend,
-                         sntextbox, show_p5_p95, cldf)
-    post_cld_fit(fname, cldf, grp_entries_list, snf)
-
-    #######################################################################
-    snf = SNFit(fit_type='basquin-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 4.8
-    snf.Rt_start = 50.0E+6
-    snf.fit_data()
-
-    post_basquin_godmann(fname, snf, ylim, legend, sntextbox)
+    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
 
 def fit_basquin_stuessi_rim(npoint):
@@ -659,52 +777,18 @@ def fit_basquin_stuessi_rim(npoint):
 
     grp_entries = [grp0_ids, grp1_ids, grp2_ids]
 
-    #######################################################################
-    snf = SNFit(fit_type='stuessi-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 4.8
-    snf.Rt_start = 67.E+6
-    snf.Re_start = 9.E+6
-    snf.Na_start = 68.
-    snf.fit_data()
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    ns = np.logspace(exp_start, exp_end, npoint)
-
-    snf.cld(ns)
-
-    #######################################################################
-    cldf = CLDFit()
-    #######################################################################
-
     grp_entries_list = [[grp0_ids, grp1_ids],
                         [grp0_ids, grp2_ids]]
 
-    cldf.m_start = 4.8
-    cldf.Rt_start = 67.E+6
-    cldf.Re_start = 9.E+6
-    cldf.Na_start = 68.
-    cldf.fit_data_groups(ns, data, grp_entries_list)
+    cfg = OrderedDict()
+    cfg['m_start'] = 4.8
+    cfg['Rt_start'] = 67.E+6
+    cfg['Re_start'] = 9.E+6
+    cfg['Na_start'] = 68.
+    cfg['ylim'] = [10, 70]
+    cfg['npoint'] = npoint
 
-    ylim = [10, 70]
-    legend = False
-    sntextbox = True
-    show_p5_p95 = False
-    post_stuessi_goodman(fname, snf, ylim, legend,
-                         sntextbox, show_p5_p95, cldf)
-    post_cld_fit(fname, cldf, grp_entries_list, snf)
-
-    #######################################################################
-    snf = SNFit(fit_type='basquin-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 4.8
-    snf.Rt_start = 67.0E+6
-    snf.fit_data()
-
-    post_basquin_godmann(fname, snf, ylim, legend, sntextbox)
+    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
 
 def fit_basquin_stuessi_epon(npoint):
@@ -737,53 +821,19 @@ def fit_basquin_stuessi_epon(npoint):
         grp3_ids,  # grp31_ids, grp32_ids
     ]
 
-    #######################################################################
-    snf = SNFit(fit_type='stuessi-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 8.5
-    snf.Rt_start = 85.E+6
-    snf.Re_start = 30.E+6
-    snf.Na_start = 39
-    snf.fit_data()
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    ns = np.logspace(exp_start, exp_end, npoint)
-
-    snf.cld(ns)
-
-    #######################################################################
-    cldf = CLDFit()
-    #######################################################################
-
     grp_entries_list = [[grp0_ids, grp1_ids],
                         [grp0_ids, grp2_ids],
                         [grp0_ids, grp3_ids]]
 
-    cldf.m_start = 8.5
-    cldf.Rt_start = 85.E+6
-    cldf.Re_start = 30.E+6
-    cldf.Na_start = 39
-    cldf.fit_data_groups(ns, data, grp_entries_list)
+    cfg = OrderedDict()
+    cfg['m_start'] = 8.5
+    cfg['Rt_start'] = 85.E+6
+    cfg['Re_start'] = 30.E+6
+    cfg['Na_start'] = 39.
+    cfg['ylim'] = [30, 90]
+    cfg['npoint'] = npoint
 
-    ylim = [30, 90]
-    legend = False
-    sntextbox = True
-    show_p5_p95 = False
-    post_stuessi_goodman(fname, snf, ylim, legend,
-                         sntextbox, show_p5_p95, cldf)
-    post_cld_fit(fname, cldf, grp_entries_list, snf)
-
-    #######################################################################
-    snf = SNFit(fit_type='basquin-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = 4.8
-    snf.Rt_start = 80.0E+6
-    snf.fit_data()
-
-    post_basquin_godmann(fname, snf, ylim, legend, sntextbox)
+    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
 
 if __name__ == '__main__':
@@ -793,7 +843,15 @@ if __name__ == '__main__':
     sa_label = r'Stress amplitude $\sigma_\text{a}$ in \si{\mega \pascal}'
     sm_label = r'Mean stress $\sigma_\text{m}$ in \si{\mega \pascal}'
 
+    rev = '00'
+
+    folder = '_result' + '_rev' + rev
+
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+    os.makedirs(folder)
+
     npoint = 8
-    # fit_basquin_stuessi_spabond(npoint)
-    # fit_basquin_stuessi_rim(npoint)
+    fit_basquin_stuessi_spabond(npoint)
+    fit_basquin_stuessi_rim(npoint)
     fit_basquin_stuessi_epon(npoint)

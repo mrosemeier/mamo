@@ -2,7 +2,25 @@ import numpy as np
 import scipy.optimize as optimize
 from scipy.special import gamma
 from collections import OrderedDict
-from __builtin__ import False
+
+
+def p_weibull(x, alpha, beta, gamma):
+    ''' 
+    Obains probability of a given Weibull distribution for a given variable x
+    p = 1. - np.exp(-((x - alpha) / beta)**gamma) for x if beta>0
+    p = np.exp(-((x - alpha) / beta)**gamma) for x if beta<0
+    Note: A negative beta flips the Weibull curve about x-axis
+    :param: x: float value probability
+    :param: alpha: float Weibull parameter
+    :param: beta: float Weibull parameter
+    :param: gamma: float Weibull parameter
+    :return: p: float probability
+    '''
+    if bet < 0:
+        x = np.exp(-((x - alpha) / beta)**gamma)
+    else:
+        x = 1. - np.exp(-((x - alpha) / beta)**gamma)
+    return x
 
 
 def x_weibull(p, alpha, beta, gamma):
@@ -23,6 +41,24 @@ def x_weibull(p, alpha, beta, gamma):
     else:
         x = alpha + beta * (-np.log(1. - p))**(1. / gamma)
     return x
+
+
+def s_weibull(alp, bet, gam):
+    ''' Shifley and Lentz 1985, Quick estimation of the three-parameter Weibull
+    to describe tree size distributions
+
+    '''
+    # mean value
+    mu_alp = bet * gamma(1. + (1. / gam))  # Eq. 2
+    mu = mu_alp + alp  # Eq. 2
+
+    # variance
+    sig2 = bet**2 * (gamma(1. + 2. / gam) - gamma(1. + (1. / gam))**2)  # Eq. 3
+
+    # standard deviation
+    sig = np.sqrt(sig2)
+
+    return mu, sig
 
 
 def pwm_weibull(xs):
@@ -243,6 +279,14 @@ def smax_limit_basquin_goodman_weibull(p, Rt_fit, alpha, beta, gamma):
     return Rt
 
 
+def xrand_smax_basquin_goodman_weibull(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, p, alpha, beta, gamma):
+    ''' Random variable x using smax
+    :return: xrand: float value
+    '''
+    return smax_i - smax_basquin_goodman_weibull(
+        N_i, R_i, m_fit, Rt_fit, M_fit, p, alpha, beta, gamma)
+
+
 def _b(m, Re, Rt):
     '''
     Transforms Basquin's m into Stuessi's b
@@ -425,6 +469,24 @@ def smax_limit_stuessi_goodman_weibull(p, R, Rt_fit, M, Re_fit, alpha, beta, gam
     Rt = xw_p + Rt_fit
 
     return Rt, Re
+
+
+def xrand_smax_stuessi_goodman_weibull(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit,
+                                       Re_fit, Na_fit, p, alpha, beta, gamma, n0=0.):
+    ''' Random variable x using smax
+    :return: xrand: float value
+    '''
+    return smax_i - smax_stuessi_goodman_weibull(N_i, R_i, m_fit, Rt_fit, M_fit,
+                                                 Re_fit, Na_fit, p, alpha, beta, gamma, n0)
+
+
+def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
+    ''' Transform m_fit when Stuessi curve is shifted in smax-direction
+    Stuessi's b_fit = b_tar
+    where b = (m * (-Re + Rt)) / (2 * (Re + Rt))
+    and (-Re_fit + Rt_fit) = (-Re_tar + Rt_tar)
+    '''
+    return m_fit * (Re_tar + Rt_tar) / (Re_fit + Rt_fit)
 
 
 def fit_basquin_goodman(cyc_data,
@@ -674,6 +736,7 @@ def fit_stuessi_goodman_weibull(cyc_data,
     def objective(params):
         m, Rt, Re, Na = params  # multiple design variables
         M = 1  # constants
+        global alp, bet, gam, xs_smax
         xs_smax = np.zeros(len(cyc_data['grps']))
         for i, (smax_actual, R, Nactual) in enumerate(
             zip(cyc_data['cyc_stress_max'][cyc_data['grps']],
@@ -682,7 +745,6 @@ def fit_stuessi_goodman_weibull(cyc_data,
             xs_smax[i] = xrand_smax_stuessi_goodman(
                 smax_actual, Nactual, R, m, Rt, M, Re, Na, n0)
 
-        global alp, bet, gam
         alp, bet, gam = pwm_weibull(xs_smax)
 
         crits = []
@@ -722,7 +784,7 @@ def fit_stuessi_goodman_weibull(cyc_data,
 
     m_fit, Rt_fit, Re_fit, Na_fit = fitted_params
 
-    return m_fit, Rt_fit, Re_fit, Na_fit, alp, bet, gam
+    return m_fit, Rt_fit, Re_fit, Na_fit, alp, bet, gam, xs_smax
 
 
 class SNFit(object):
@@ -800,7 +862,7 @@ class SNFit(object):
         self.sn_fit = OrderedDict()
 
         if self.fit_type == 'basquin-goodman':
-            m, Rt_fit, alpha_, beta_, gamma_ =\
+            m_fit, Rt_fit, alpha_, beta_, gamma_ =\
                 fit_basquin_goodman_weibull(self.cyc_data,
                                             self.m_start,
                                             self.Rt_start)
@@ -812,16 +874,9 @@ class SNFit(object):
                                                        gamma=gamma_)
             alpha, beta, gamma = alpha_, beta_, gamma_
 
-            # xw_50 = x_weibull(p=0.5, alpha=alpha_,
-            #                  beta=beta_, gamma=gamma_)
-
-            #alpha, beta, gamma = Rt_weibull(self.cyc_data, Rt_fit, m, xw_50)
-
-            #Rt_fit = Rt_50
-
         elif self.fit_type == 'stuessi-goodman':
 
-            m, Rt_fit, Re_fit, Na, alpha, beta, gamma =\
+            m_fit, Rt_fit, Re_fit, Na, alpha_, beta_, gamma_, xs =\
                 fit_stuessi_goodman_weibull(self.cyc_data,
                                             self.m_start,
                                             self.Rt_start,
@@ -834,26 +889,32 @@ class SNFit(object):
                                                               Rt_fit=Rt_fit,
                                                               M=1,
                                                               Re_fit=Re_fit,
-                                                              alpha=alpha,
-                                                              beta=beta,
-                                                              gamma=gamma)
+                                                              alpha=alpha_,
+                                                              beta=beta_,
+                                                              gamma=gamma_)
 
             _, Re_50_R = smax_limit_stuessi_goodman_weibull(p=0.5,
                                                             R=self.cyc_data['cyc_ratio_grp'],
                                                             Rt_fit=Rt_fit,
                                                             M=1,
                                                             Re_fit=Re_fit,
-                                                            alpha=alpha,
-                                                            beta=beta,
-                                                            gamma=gamma)
+                                                            alpha=alpha_,
+                                                            beta=beta_,
+                                                            gamma=gamma_)
 
+            m_50 = m_RtRd(m_fit, Rt_fit, Re_fit, Rt_50, Re_50)
+
+            alpha, beta, gamma = alpha_, beta_, gamma_
+
+            self.sn_fit['m_50'] = m_50
             self.sn_fit['Re_fit'] = Re_fit
             self.sn_fit['Na'] = Na
             self.sn_fit['Re_50'] = Re_50
             self.sn_fit['Re_50_R'] = Re_50_R.tolist()
+            self.sn_fit['xs'] = xs.tolist()
 
         elif self.fit_type == 'stuessi':
-            m, Rt_fit, Re_fit, Na, alpha, beta, gamma =\
+            m_fit, Rt_fit, Re_fit, Na, alpha, beta, gamma =\
                 fit_stuessi_weibull(self.cyc_data,
                                     self.m_start,
                                     self.Rt_start,
@@ -869,7 +930,7 @@ class SNFit(object):
             self.sn_fit['Re_50'] = Re_50
             self.sn_fit['Re_50_R'] = Re_50_R.tolist()
 
-        self.sn_fit['m'] = m
+        self.sn_fit['m_fit'] = m_fit
         self.sn_fit['Rt_fit'] = Rt_fit
         self.sn_fit['alpha'] = alpha
         self.sn_fit['beta'] = beta
@@ -878,7 +939,7 @@ class SNFit(object):
 
     def cld(self, ns):
         '''
-        Obrain CLD from SNfit
+        Obtain CLD from SNfit
         :return: sas: array (ngrp+1,npoint) stress amplitudes
         :return: sms: array (ngrp+1,npoint) mean stress
         :return: sn_grp: dict with sub dicts of fitting parameters per group
@@ -900,7 +961,7 @@ class SNFit(object):
             cyc_stress_max = self.cyc_data['cyc_stress_max']
             cyc_cycles = self.cyc_data['cyc_cycles']
             cyc_ratio_grp = self.cyc_data['cyc_ratio_grp']
-            m_fit = self.sn_fit['m']
+            m_fit = self.sn_fit['m_fit']
             Rt_fit = self.sn_fit['Rt_fit']
             Re_fit = self.sn_fit['Re_fit']
             Na_fit = self.sn_fit['Na']
@@ -927,6 +988,11 @@ class SNFit(object):
                     else:
                         sm_50 = sm(sa_50, R_)
                     self.sms[Ri, ni] = sm_50
+
+    def shift_sn(self, dRt, p):
+        '''
+
+        '''
 
 
 class CLDFit(SNFit):
@@ -968,7 +1034,7 @@ class CLDFit(SNFit):
             cyc_stress_max = self.cyc_data['cyc_stress_max']
             cyc_cycles = self.cyc_data['cyc_cycles']
             cyc_ratio_grp = self.cyc_data['cyc_ratio_grp']
-            m_fit = self.sn_fit['m']
+            m_fit = self.sn_fit['m_fit']
             Rt_fit = self.sn_fit['Rt_fit']
             Re_fit = self.sn_fit['Re_fit']
             Na_fit = self.sn_fit['Na']

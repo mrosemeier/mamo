@@ -570,14 +570,13 @@ def N_smax_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp, n0=1.0):
     return n
 
 
-def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, n0=1.0):
+def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
 
     def getsmax(n_):
-        a_ = alp_c[0]
-        b_ = alp_c[1]
-        c_ = alp_c[2]
-
-        alp = explogx(n_, a_, b_, c_)
+        if alp_fit == 'lin':
+            alp = poly1dlogx(n_, alp_c[0], alp_c[1], alp_c[2])
+        elif alp_fit == 'exp':
+            alp = explogx(n_, alp_c[0], alp_c[1], alp_c[2])
 
         def fun(smax_):
             if R == -1.0:
@@ -825,7 +824,7 @@ def N_smax_stuessi_goodman_weibull(smax, R, m, Rt_fit, M, Re_fit, Na, p, alpha, 
     return N_smax_stuessi_goodman(xw + smax, R, m, Rt_fit, M, Re_fit, Na, n0)
 
 
-def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, Na, p, alpha, beta, gamma, n0):
+def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma, n0):
     '''
     Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
@@ -842,7 +841,7 @@ def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, Na, p, alpha, 
     :return: smax: float allowable maximum stress
     '''
     return x_weibull(p, alpha, beta, gamma) +\
-        smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, n0)
+        smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n0)
 
 
 def smax_limit_stuessi_goodman_weibull(p, R, Rt_fit, M, Re_fit, alpha, beta, gamma):
@@ -884,11 +883,11 @@ def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
     return m_fit * (Re_tar + Rt_tar) / (Re_fit + Rt_fit)
 
 
-def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, n0=0.):
+def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit, n0=0.):
     ''' Random variable x using smax
     :return: xrand: float value
     '''
-    return smax_i - smax_stuessi_boerstra(N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, n0)
+    return smax_i - smax_stuessi_boerstra(N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit, n0)
 
 
 def fit_basquin_goodman(cyc_data,
@@ -1242,6 +1241,7 @@ def fit_stuessi_boerstra_weibull(cyc_data,
                                  Re_start=40.,
                                  Na_start=1E3,
                                  alp_c=[1., 0., 0.],
+                                 alp_fit='exp',
                                  n0=0.,
                                  include_weibull=False):
     '''
@@ -1279,7 +1279,7 @@ def fit_stuessi_boerstra_weibull(cyc_data,
                         cyc_data['cyc_ratios'][cyc_data['grps']],
                         cyc_data['cyc_cycles'][cyc_data['grps']])):
                     xs_smax[i] = xrand_smax_stuessi_boerstra(
-                        smax_actual, Nactual, R, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, n0=0.)
+                        smax_actual, Nactual, R, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit, n0=0.)
 
                 alp, bet, gam = pwm_weibull(xs_smax)
                 #mu, sig = s_weibull(alp, bet, gam)
@@ -1293,11 +1293,11 @@ def fit_stuessi_boerstra_weibull(cyc_data,
                 p = 0.50
                 if include_weibull:
                     smax_50 = smax_stuessi_boerstra_weibull(
-                        Nactual, R=R, m=m, Rt_fit=Rt, Re_fit=Re, alp_c=alp_c, Na=Na,
+                        Nactual, R=R, m=m, Rt_fit=Rt, Re_fit=Re, alp_c=alp_c, alp_fit=alp_fit, Na=Na,
                         p=p, alpha=alp, beta=bet, gamma=gam, n0=n0)
                 else:
                     smax_50 = smax_stuessi_boerstra(
-                        Nactual, R=R, m=m, Rt=Rt, Re=Re, Na=Na, alp_c=alp_c, n0=n0)
+                        Nactual, R=R, m=m, Rt=Rt, Re=Re, Na=Na, alp_c=alp_c, alp_fit=alp_fit, n0=n0)
 
                 crit1 = (np.log10(smax_50) - np.log10(smax_actual))**2
 
@@ -1329,7 +1329,7 @@ def fit_stuessi_boerstra_weibull(cyc_data,
                     cyc_data['cyc_ratios'][cyc_data['grps']],
                     cyc_data['cyc_cycles'][cyc_data['grps']])):
             xs_smax[i] = xrand_smax_stuessi_boerstra(
-                smax_actual, Nactual, R, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, n0=0.)
+                smax_actual, Nactual, R, m_fit, Rt_fit, Re_fit, Na_fit, alp_c,  alp_fit, n0=0.)
 
         alp, bet, gam = pwm_weibull(xs_smax)
 
@@ -1477,8 +1477,10 @@ class SNFit(object):
                                              self.Re_start,
                                              self.Na_start,
                                              self.alp_c,
+                                             self.alp_fit,
                                              self.n0,
-                                             include_weibull)
+                                             include_weibull
+                                             )
 
             Rt_50, Re_50 = smax_limit_stuessi_goodman_weibull(p=0.5,
                                                               R=-1,
@@ -1579,10 +1581,13 @@ class SNFit(object):
                         Re_fit=Re_fit, Na=Na_fit,
                         p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
                 elif self.fit_type == 'stuessi-boerstra':
-                    smax_50 = smax_stuessi_boerstra_weibull(
-                        n_, R=R_, m=m_fit, Rt_fit=Rt_fit,
-                        Re_fit=Re_fit, Na=Na_fit, alp_c=self.alp_c,
-                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
+                    try:
+                        smax_50 = smax_stuessi_boerstra_weibull(
+                            n_, R=R_, m=m_fit, Rt_fit=Rt_fit,
+                            Re_fit=Re_fit, Na=Na_fit, alp_c=self.alp_c, alp_fit=self.alp_fit,
+                            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
+                    except:
+                        smax_50 = np.nan
                 self.sas[Ri, ni] = sa_50 = sa_smax(smax_50, R_)
                 if R_ == 1:
                     sm_50 = smax_50
@@ -1669,10 +1674,12 @@ class CLDFit(SNFit):
         del self.sn_fit
         del self.cyc_data
 
-    def fit_alp(self, fit='linear', idxs=[]):
+    def fit_alp(self, alp_fit='exp', alp_idxs=[]):
 
-        sm0 = self.sms[0, 0]
-        sa0 = Rt = self.sas[-1, 0]
+        self.alp_fit = alp_fit
+
+        sm0 = Rt = self.sms[0, 0]
+        sa0 = self.sas[-1, 0]
 
         ns = self.ns
         npoint = len(ns)
@@ -1707,15 +1714,15 @@ class CLDFit(SNFit):
 
         '''
         # fit alp over n
-        if not idxs:
-            idxs = range(len(ns))
+        if not alp_idxs:
+            alp_idxs = range(len(ns))
 
-        xdata = ns[idxs]
-        ydata = self.alp[idxs]
-        popt = np.polyfit(xdata, ydata, 1)
-        if fit == 'linear':
+        xdata = ns[alp_idxs]
+        ydata = self.alp[alp_idxs]
+        #popt = np.polyfit(xdata, ydata, 1)
+        if alp_fit == 'lin':
             popt, pcov = optimize.curve_fit(poly1dlogx, xdata, ydata)
-        elif fit == 'exp':
+        elif alp_fit == 'exp':
             popt, pcov = optimize.curve_fit(explogx, xdata, ydata)
         self.alp_c = alp_opt = popt
         '''

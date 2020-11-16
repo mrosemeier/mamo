@@ -5,7 +5,7 @@ from mamo.models.sn import smax_stuessi_goodman_weibull, smax_stuessi_goodman,\
     N_smax_stuessi_goodman_weibull, sa_smax, sm, sa_stuessi_weibull, CLDFit,\
     p_weibull, s_weibull, sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
     sa_swt, sa_tosa, sa_boerstra, smax_stuessi_boerstra, N_smax_stuessi_boerstra,\
-    explogx, N_stuessi, smax_stuessi_boerstra_weibull
+    explogx, N_stuessi, smax_stuessi_boerstra_weibull, poly1dlogx
 
 import matplotlib as mpl
 from mamo.models.lib import readjson, writejson
@@ -336,6 +336,7 @@ def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, 
     Re_fit = snf.sn_fit['Re_fit']
     Na_fit = snf.sn_fit['Na']
     alp_c = snf.alp_c
+    alp_fit = snf.alp_fit
     alp_smax_fit = snf.sn_fit['alpha']
     bet_smax_fit = snf.sn_fit['beta']
     gam_smax_fit = snf.sn_fit['gamma']
@@ -374,7 +375,7 @@ def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, 
                 p = 0.05
                 smax_05 = smax_stuessi_boerstra_weibull(
                     ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c,
+                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
                     p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
                 ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
                             label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
@@ -382,7 +383,7 @@ def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, 
             p = 0.50
             smax_50 = smax_stuessi_boerstra_weibull(
                 ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c,
+                Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
                 p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
             ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
                         label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
@@ -393,7 +394,7 @@ def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, 
                 p = 0.95
                 smax_95 = smax_stuessi_boerstra_weibull(
                     ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c,
+                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
                     p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
                 ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
                             label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
@@ -638,7 +639,11 @@ def post_cld_fit(fname, cldf, grp_entries_list, snf=[]):
     exp_start = 0  # 10^0
     exp_end = 7  # 10^7
     nsf = np.logspace(exp_start, exp_end, 1000)
-    ax.semilogx(nsf, explogx(nsf, *cldf.alp_c), '-',
+    if cldf.alp_fit == 'exp':
+        alpf = explogx(nsf, *cldf.alp_c)
+    elif cldf.alp_fit == 'lin':
+        alpf = poly1dlogx(nsf, *cldf.alp_c)
+    ax.semilogx(nsf, alpf, '-',
                 label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (cldf.alp_c[0], cldf.alp_c[1], cldf.alp_c[2]))
 
     ax.set_ylabel(alp_label)
@@ -872,7 +877,7 @@ def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
     cldf.Re_start = cfg['Re_start']
     cldf.Na_start = cfg['Na_start']
     cldf.fit_data_groups(ns, data, grp_entries_list)
-    cldf.fit_alp(fit='linear', idxs=[0, 1, 2, 5, 6, 7])
+    cldf.fit_alp(alp_fit=cfg['alp_fit'], alp_idxs=cfg['alp_idxs'])
 
     #######################################################################
     snf = SNFit(fit_type='stuessi-boerstra')
@@ -882,6 +887,7 @@ def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
     snf.Rt_start = cfg['Rt_start']
     snf.Re_start = cfg['Re_start']
     snf.alp_c = cldf.alp_c  # cfg['alp_c']
+    snf.alp_fit = cldf.alp_fit
     snf.Na_start = cfg['Na_start']
     snf.fit_data(cfg['include_weibull'])
     snf.cld(ns)
@@ -976,6 +982,8 @@ def fit_basquin_stuessi_spabond(npoint=8):
     cfg['ylim'] = [10, 60]
     cfg['npoint'] = npoint
     cfg['include_weibull'] = False
+    cfg['alp_fit'] = 'lin'
+    cfg['alp_idxs'] = [0, 1, 2, 5, 6, 7]
 
     process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
@@ -1007,7 +1015,9 @@ def fit_basquin_stuessi_rim(npoint):
     cfg['ylim'] = [10, 70]
     cfg['npoint'] = npoint
     cfg['include_weibull'] = False
-    cfg['alp_c'] = [0.63, 0.18, 0.37]
+    #cfg['alp_c'] = [0.63, 0.18, 0.37]
+    cfg['alp_fit'] = 'exp'
+    cfg['alp_idxs'] = []
 
     process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
@@ -1054,6 +1064,8 @@ def fit_basquin_stuessi_epon(npoint):
     cfg['ylim'] = [30, 90]
     cfg['npoint'] = npoint
     cfg['include_weibull'] = False
+    cfg['alp_fit'] = 'lin'
+    cfg['alp_idxs'] = [3, 4, 5, 6, 7]
 
     process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
@@ -1397,6 +1409,6 @@ if __name__ == '__main__':
     os.makedirs(folder)
 
     npoint = 8
-    fit_basquin_stuessi_spabond(npoint)
-    # fit_basquin_stuessi_epon(npoint)
-    fit_basquin_stuessi_rim(npoint)
+    # fit_basquin_stuessi_spabond(npoint)
+    fit_basquin_stuessi_epon(npoint)
+    # fit_basquin_stuessi_rim(npoint)

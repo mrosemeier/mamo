@@ -313,12 +313,85 @@ def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, textbox=True, s
     plt.close(fig)
 
 
-def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True, cldf=[]):
+def post_stuessi(fname, cldf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True):
+
+    exp_start = xlim[0]  # 10^0
+    exp_end = xlim[1]  # 10^7
+    ns = np.logspace(exp_start, exp_end, 1E3)
+
+    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
+
+    M_fit = 1
+    lstyle = '-'
+
+    #
+
+    n0_s = cldf.n0
+
+    #gidxs = [0, 1, 2, 3]
+    gidxs = range(len(cldf.sn_grp))
+
+    #######################################################################
+    figname = fname + '_' + 'sn_stuessi'
+    #######################################################################
+    fig, ax = plt.subplots()
+
+    for gidx_s in gidxs:
+        col = next(ax._get_lines.prop_cycler)['color']
+
+        #gidx_s = gidx - 1
+        grps_s = cldf.sn_grp[gidx_s]['cyc_data']['grplist']
+        cyc_stress_max_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_stress_max']
+        cyc_cycles_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_cycles']
+        cyc_ratio_grp_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_ratio_grp']
+        m_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['m_fit']
+        Rt_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_fit']
+        Re_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_fit']
+        Na_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Na']
+        alp_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['alpha']
+        bet_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['beta']
+        gam_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['gamma']
+        Rt_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_50']
+        Re_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50']
+        Re_50_R_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50_R']
+
+        if not cyc_ratio_grp_s[1] == 1:  # skip R=1 curves
+            p = 0.50
+            sa_50 = sa_stuessi_weibull(
+                ns, R=cyc_ratio_grp_s[1], m=m_fit_s, Rt_fit=Rt_fit_s, M=M_fit,
+                Re_fit=Re_fit_s, Na=Na_fit_s,
+                p=p, alpha=alp_smax_fit_s, beta=bet_smax_fit_s, gamma=gam_smax_fit_s, n0=n0_s)
+            ax.semilogx(ns, sa_50 * 1E-6, linestyle='--', color=col,
+                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
+
+        for gidx_s_ in grps_s:
+            for i, (s, n) in enumerate(zip(cyc_stress_max_s[gidx_s_], cyc_cycles_s[gidx_s_])):
+                # if not cyc_ratio_grp_s[0] == 1:
+                ax.semilogx(n, s * 1E-6, 'd',
+                            color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp_s[1])))  # label=_lab(i, r'Exp.'))
+
+    ax.set_ylabel(smax_label)
+    ax.set_xlabel(n_label)
+    ax.set_ylim(ylim[0], ylim[1])
+    ax.set_xlim(None, None)
+    if legend:
+        ax.legend(ncol=1, loc='lower left')
+    ystep = 10
+    yticks = np.arange(ylim[0], ylim[1] + ystep, ystep)
+    ax.set_yticks(ticks=yticks, minor=False)
+    import matplotlib.ticker as ticker
+    ax.yaxis.set_major_formatter(
+        ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    savefig(fig, folder=folder, figname=figname)
+    plt.close(fig)
+
+
+def post_stuessi_boerstra(fname, snf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True, cldf=[]):
 
     writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_sb.json'))
 
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
+    exp_start = xlim[0]  # 10^0
+    exp_end = xlim[1]  # 10^7
     ns = np.logspace(exp_start, exp_end, 1E3)
 
     cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
@@ -473,12 +546,12 @@ def post_stuessi_boerstra(fname, snf, ylim=[10, 80], legend=True, textbox=True, 
     plt.close(fig)
 
 
-def post_basquin_godmann(fname, snf, ylim=[10, 80], legend=True, textbox=True):
+def post_basquin_godmann(fname, snf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True):
 
     writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_bg.json'))
 
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
+    exp_start = xlim[0]  # 10^0
+    exp_end = xlim[1]  # 10^7
     ns = np.logspace(exp_start, exp_end, 1E3)
 
     cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
@@ -643,8 +716,10 @@ def post_cld_fit(fname, cldf, grp_entries_list, snf=[]):
         alpf = explogx(nsf, *cldf.alp_c)
     elif cldf.alp_fit == 'lin':
         alpf = poly1dlogx(nsf, *cldf.alp_c)
-    ax.semilogx(nsf, alpf, '-',
-                label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (cldf.alp_c[0], cldf.alp_c[1], cldf.alp_c[2]))
+    elif cldf.alp_fit == 'aki':
+        alpf = cldf.alp_c(np.log10(nsf))
+    ax.semilogx(nsf, alpf, '-')
+    # ,label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (cldf.alp_c[0], cldf.alp_c[1], cldf.alp_c[2]))
 
     ax.set_ylabel(alp_label)
     ax.set_xlabel(n_label)
@@ -862,22 +937,92 @@ def post_weibull(fname, snf, legend=True, textbox=True):
     plt.close(fig)
 
 
+def post_cld(fname, snf, cfg, legend=True, textbox=True):
+    #######################################################################
+    figname = fname + '_' + 'cld_fit_' + snf.fit_type
+    #######################################################################
+    fig, ax = plt.subplots()
+
+    nfilt = cfg['nfilt']
+
+    for _, (i, n) in enumerate(zip(nfilt, snf.ns[nfilt])):
+        col = next(ax._get_lines.prop_cycler)['color']
+        ax.plot(snf.sm_proj[:, i] * 1E-6,
+                snf.sa_proj[:, i] * 1E-6, 'd', color=col)
+
+        ax.plot(snf.sms_b * 1E-6,
+                snf.sas_b[:, i] * 1E-6,
+                '-', color=col, label=r'$N=\num{%0.0E}$' % (n))
+
+    ax.set_ylabel(sa_label)
+    ax.set_xlabel(sm_label)
+    ax.legend()
+    savefig(fig, folder=folder, figname=figname)
+    plt.close(fig)
+
+
+def post_alp(fname, snf, cfg, legend=True, textbox=True):
+    #######################################################################
+    figname = fname + '_' + 'cld_alp_fit'
+    #######################################################################
+    fig, ax = plt.subplots()
+
+    nfilt = cfg['nfilt']
+
+    for _, (i, n) in enumerate(zip(nfilt, snf.ns[nfilt])):
+        col = next(ax._get_lines.prop_cycler)['color']
+
+        ax.semilogx(n, snf.alp[i],
+                    'o', color=col, label=r'Boerstra fit')
+    exp_start = 0  # 10^0
+    exp_end = 8  # 10^7
+    nsf = np.logspace(exp_start, exp_end, 1000)
+    if snf.alp_fit == 'exp':
+        alpf = explogx(nsf, *snf.alp_c)
+    elif snf.alp_fit == 'lin':
+        alpf = poly1dlogx(nsf, *snf.alp_c)
+    elif snf.alp_fit == 'aki':
+        alpf = snf.alp_c(np.log10(nsf))
+    ax.semilogx(nsf, alpf, '--', color='k', label=r'Akima fit')
+    # ,label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (cldf.alp_c[0], cldf.alp_c[1], cldf.alp_c[2]))
+
+    ax.set_ylabel(alp_label)
+    ax.set_xlabel(n_label)
+    #ax.set_ylim(None, 1)
+    ax.legend()
+    savefig(fig, folder=folder, figname=figname)
+    plt.close(fig)
+
+
 def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
 
-    #######################################################################
-    cldf = CLDFit()
-    #######################################################################
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
+    exp_start = cfg['xlim'][0]
+    exp_end = cfg['xlim'][1]
     npoint = cfg['npoint']
     ns = np.logspace(exp_start, exp_end, npoint)
 
-    cldf.m_start = cfg['m_start']
-    cldf.Rt_start = cfg['Rt_start']
-    cldf.Re_start = cfg['Re_start']
-    cldf.Na_start = cfg['Na_start']
-    cldf.fit_data_groups(ns, data, grp_entries_list)
-    cldf.fit_alp(alp_fit=cfg['alp_fit'], alp_idxs=cfg['alp_idxs'])
+    #######################################################################
+    snf = SNFit(fit_type='basquin-goodman')
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.fit_sn(cfg['include_weibull'])
+    snf.project_data(ns)
+    snf.fit_cld()
+
+    #######################################################################
+    # Post Basquin-Goodman
+    #######################################################################
+    ylim = cfg['ylim']
+    xlim = cfg['xlim']
+    legend = False
+    textbox = True
+    show_p5_p95 = False
+
+    post_basquin_godmann(fname, snf, xlim, ylim, legend, textbox)
+    post_weibull(fname, snf, legend=True, textbox=True)
+    post_cld(fname, snf, cfg, legend=True, textbox=True)
 
     #######################################################################
     snf = SNFit(fit_type='stuessi-boerstra')
@@ -886,26 +1031,29 @@ def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
     snf.m_start = cfg['m_start']
     snf.Rt_start = cfg['Rt_start']
     snf.Re_start = cfg['Re_start']
-    snf.alp_c = cldf.alp_c  # cfg['alp_c']
-    snf.alp_fit = cldf.alp_fit
+    snf.alp_c = cfg['alp_c']
+    snf.alp_fit = cfg['alp_fit']  # cldf.alp_fit
     snf.Na_start = cfg['Na_start']
-    snf.fit_data(cfg['include_weibull'])
-    snf.cld(ns)
-
+    # snf.fit_sn(cfg['include_weibull'])
+    # snf.fit_cld(ns,
+    #        alp_min=cfg['alp_min'],
+    #        alp_fit=cfg['alp_fit'],
+    #        alp_idxs=cfg['alp_idxs'])
+    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
     #######################################################################
     # Post Stuessi-Boerstra
     #######################################################################
-    ylim = cfg['ylim']
-    legend = False
-    textbox = True
-    show_p5_p95 = False
-    post_stuessi_boerstra(fname, snf, ylim, legend,
-                          textbox, show_p5_p95, cldf)
-    post_stuessi_boerstra(fname, snf, ylim, legend,
+
+    # post_stuessi_boerstra(fname, snf, ylim, legend,
+    #                      textbox, show_p5_p95, cldf)
+    post_stuessi_boerstra(fname, snf, xlim, ylim, legend,
                           textbox, show_p5_p95=True)
-    post_cld_fit(fname, cldf, grp_entries_list, snf)
+    #post_cld_fit(fname, cldf, grp_entries_list, snf)
     post_weibull(fname, snf, legend=True, textbox=True)
+    post_cld(fname, snf, cfg, legend=True, textbox=True)
+    post_alp(fname, snf, cfg, legend=True, textbox=True)
     ####################
+
     '''
     #######################################################################
     snf = SNFit(fit_type='stuessi-goodman')
@@ -915,9 +1063,9 @@ def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
     snf.Rt_start = cfg['Rt_start']
     snf.Re_start = cfg['Re_start']
     snf.Na_start = cfg['Na_start']
-    snf.fit_data(cfg['include_weibull'])
+    snf.fit_sn(cfg['include_weibull'])
 
-    snf.cld(ns)
+    snf.fit_cld(ns)
 
     #######################################################################
     # Post Stuessi-Goodman
@@ -941,21 +1089,11 @@ def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
     with open('cld_fit_rim.pkl', 'wb') as mysavedata:
         cPickle.dump(out, mysavedata)
     '''
-    #######################################################################
-    snf = SNFit(fit_type='basquin-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = cfg['m_start']
-    snf.Rt_start = cfg['Rt_start']
-    snf.fit_data(cfg['include_weibull'])
-
-    post_basquin_godmann(fname, snf, ylim, legend, textbox)
-    post_weibull(fname, snf, legend=True, textbox=True)
 
 
 def fit_basquin_stuessi_spabond(npoint=8):
 
-    fname = 'Spabond340_rev00'
+    fname = 'Spabond340_rev06'
     sfx = '.dat'
     path_data = 'data'
     path_file = os.path.join(path_data, fname + sfx)
@@ -963,34 +1101,108 @@ def fit_basquin_stuessi_spabond(npoint=8):
     data[:, 1] = data[:, 1] * 1E+6  # transform to SI
     data[:, 2] = data[:, 2] * 1E+6  # transform to SI
 
-    grp0_ids = [0, 1, 2]  # R=1
-    grp1_ids = [3, 4]  # R=0.6
-    grp2_ids = [5, 6]  # R=0.1
-    grp3_ids = [7, 8, 9]  # R=-1
+    if fname == 'Spabond340_rev00':
+        grp0_ids = [0, 1, 2]  # R=1
+        grp1_ids = [3, 4]  # R=0.6
+        grp2_ids = [5, 6]  # R=0.1
+        grp3_ids = [7, 8, 9]  # R=-1
 
-    grp_entries = [grp0_ids, grp1_ids, grp2_ids, grp3_ids]
+        grp_entries = [grp0_ids, grp1_ids, grp2_ids, grp3_ids]
 
-    grp_entries_list = [[grp0_ids, grp1_ids],
-                        [grp0_ids, grp2_ids],
-                        [grp0_ids, grp3_ids]]
+        grp_entries_list = [[grp0_ids, grp1_ids],
+                            [grp0_ids, grp2_ids],
+                            [grp0_ids, grp3_ids]]
+    elif fname == 'Spabond340_rev04':
+        grp0_ids = list(np.arange(0, 5))  # R=1
+        grp11_ids = list(np.arange(5, 6))  # R=0.8
+        grp12_ids = list(np.arange(6, 8))  # R=0.8
+        grp21_ids = list(np.arange(8, 12))  # R=0.7...0.64
+        grp22_ids = list(np.arange(12, 14))
+        grp2f_ids = list(np.arange(7, 14))
+        grp3_ids = list(np.arange(14, 16))  # R=0.1
+        grp4_ids = list(np.arange(16, 19))  # R=-1
+
+        grp_entries = [grp0_ids,
+                       grp11_ids,
+                       grp12_ids,
+                       grp21_ids,
+                       grp22_ids,
+                       grp3_ids,
+                       grp4_ids]  # ,grp1_ids,  grp3_ids
+
+        grp_entries_list = [  # [grp0_ids, grp1_ids],
+            [grp0_ids, grp2f_ids],
+            [grp0_ids, grp3_ids],
+            #[grp0_ids, grp4_ids]
+        ]
+    elif fname == 'Spabond340_rev05':
+        grp0_ids = list(np.arange(0, 5))  # R=1
+        grp11_ids = list(np.arange(10, 11))  # R=0.8
+        grp12_ids = list(np.arange(11, 13))  # R=0.8
+        grp21_ids = list(np.arange(13, 17))  # R=0.7...0.64
+        grp22_ids = list(np.arange(17, 19))
+        grp2f_ids = list(np.arange(12, 19))
+        grp3_ids = list(np.arange(19, 21))  # R=0.1
+        grp4_ids = list(np.arange(21, 24))  # R=-1
+
+        grp_entries = [grp0_ids,
+                       # grp11_ids,
+                       grp12_ids,
+                       grp21_ids,
+                       grp22_ids,
+                       grp3_ids,
+                       grp4_ids]  # ,grp1_ids,  grp3_ids
+
+        grp_entries_list = [  # [grp0_ids, grp1_ids],
+            [grp0_ids, grp2f_ids],
+            [grp0_ids, grp3_ids],
+            #[grp0_ids, grp4_ids]
+        ]
+
+    elif fname == 'Spabond340_rev06':
+        grp0_ids = list(np.arange(0, 22))  # R=1
+        grp11_ids = list(np.arange(22, 23))  # R=0.8
+        grp12_ids = list(np.arange(23, 25))  # R=0.8
+        grp21_ids = list(np.arange(25, 29))  # R=0.7...0.64
+        grp22_ids = list(np.arange(29, 31))
+        grp2f_ids = list(np.arange(24, 31))
+        grp3_ids = list(np.arange(31, 33))  # R=0.1
+        grp4_ids = list(np.arange(33, 36))  # R=-1
+
+        grp_entries = [grp0_ids,
+                       grp11_ids,
+                       grp12_ids,
+                       grp21_ids,
+                       grp22_ids,
+                       grp3_ids,
+                       grp4_ids]  # ,grp1_ids,  grp3_ids
+
+        grp_entries_list = [  # [grp0_ids, grp1_ids],
+            [grp0_ids, grp2f_ids],
+            [grp0_ids, grp3_ids],
+            #[grp0_ids, grp4_ids]
+        ]
 
     cfg = OrderedDict()
     cfg['m_start'] = 6.0
     cfg['Rt_start'] = 40.E+6
-    cfg['Re_start'] = 20.E+6
-    cfg['Na_start'] = 1E2
+    cfg['Re_start'] = 10.E+6
+    cfg['Na_start'] = 1E3
     cfg['ylim'] = [10, 60]
-    cfg['npoint'] = npoint
+    cfg['xlim'] = [0, 1]
+    cfg['npoint'] = 5 * 9
     cfg['include_weibull'] = False
-    cfg['alp_fit'] = 'lin'
-    cfg['alp_idxs'] = [0, 1, 2, 5, 6, 7]
+    cfg['alp_fit'] = 'exp'  # 'aki'
+    cfg['alp_min'] = 0.475
+    cfg['alp_c'] = [1.0, 0, 0]
+    cfg['alp_idxs'] = []  # [0, 5, 6, 7, 8]  # [0, 1, 2]
 
     process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
 
 def fit_basquin_stuessi_rim(npoint):
 
-    fname = 'RIMR035c_rev01'
+    fname = 'RIMR035c_rev03'
     sfx = '.dat'
     path_data = 'data'
     path_file = os.path.join(path_data, fname + sfx)
@@ -998,27 +1210,40 @@ def fit_basquin_stuessi_rim(npoint):
     data[:, 1] = data[:, 1] * 1E+6  # transform to SI
     data[:, 2] = data[:, 2] * 1E+6  # transform to SI
 
-    grp0_ids = list(np.arange(0, 7))  # R=1 # exclude 50.39 and 59 MPa
-    grp1_ids = list(np.arange(9, 19))  # R=0.1 incl runouts 20
-    grp2_ids = list(np.arange(20, 27))  # R=-1 incl runouts 28
+    if fname == 'RIMR035c_rev01':
+        grp0_ids = list(np.arange(0, 7))  # R=1 # exclude 50.39 and 59 MPa
+        grp1_ids = list(np.arange(9, 19))  # R=0.1 incl runouts 20
+        grp2_ids = list(np.arange(20, 27))  # R=-1 incl runouts 28
+
+    elif fname == 'RIMR035c_rev02':
+        grp0_ids = list(np.arange(0, 3))
+        grp1_ids = list(np.arange(3, 13))
+        grp2_ids = list(np.arange(13, 21))
+
+    elif fname == 'RIMR035c_rev03':
+        grp0_ids = list(np.arange(0, 4))
+        grp1_ids = list(np.arange(5, 15))
+        grp2_ids = list(np.arange(15, 23))
 
     grp_entries = [grp0_ids, grp1_ids, grp2_ids]
-
     grp_entries_list = [[grp0_ids, grp1_ids],
                         [grp0_ids, grp2_ids]]
 
     cfg = OrderedDict()
-    cfg['m_start'] = 4.8
-    cfg['Rt_start'] = 51.E+6
-    cfg['Re_start'] = 15.E+6
-    cfg['Na_start'] = 86.
-    cfg['ylim'] = [10, 70]
-    cfg['npoint'] = npoint
+    cfg['m_start'] = 5.66
+    cfg['Rt_start'] = 65.E+6
+    cfg['Re_start'] = 13.E+6
+    cfg['Na_start'] = 325
+    cfg['ylim'] = [10, 80]
+    cfg['xlim'] = [0, 8]
+    cfg['npoint'] = 17
     cfg['include_weibull'] = False
-    #cfg['alp_c'] = [0.63, 0.18, 0.37]
     cfg['alp_fit'] = 'exp'
-    cfg['alp_idxs'] = []
-
+    cfg['alp_min'] = 0.40
+    cfg['alp_c'] = [1.0, 0, 0]
+    cfg['alp_idxs'] = [0,  6, 7, 8, 9, 10, 11,
+                       12, 13, 14, 15, 16]  # [0, 1, 2]
+    cfg['nfilt'] = [0, 6, 8, 10, 12]
     process_fit(fname, data, grp_entries, grp_entries_list, cfg)
 
 
@@ -1400,7 +1625,7 @@ if __name__ == '__main__':
     # test_cld_fit(folder='')
     # test_stuessi_boerstra(folder='')
 
-    rev = '02'
+    rev = '04'
 
     folder = '_result' + '_rev' + rev
 
@@ -1410,5 +1635,5 @@ if __name__ == '__main__':
 
     npoint = 8
     # fit_basquin_stuessi_spabond(npoint)
-    fit_basquin_stuessi_epon(npoint)
-    # fit_basquin_stuessi_rim(npoint)
+    # fit_basquin_stuessi_epon(npoint)
+    fit_basquin_stuessi_rim(npoint)

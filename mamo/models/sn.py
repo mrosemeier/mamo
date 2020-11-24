@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import interpolate
 import scipy.optimize as optimize
 from scipy.special import gamma
 from collections import OrderedDict
@@ -293,11 +294,16 @@ def sa_smax(smax, R):
     :param: R: float stress ratio
     :return: sa: float stress amplitude
     '''
-    if R == 1:
-        sa = 0.
-    else:
-        sa = smax / ((1. + R) / (1. - R) + 1)
-    return sa
+    return 0.5 * smax * (1. - R)
+
+
+def sm_smax(smax, R):
+    ''' Stress amplitude as function of max stress and stress ratio
+    :param: smax: float maximum stress
+    :param: R: float stress ratio
+    :return: sm: float mean stress 
+    '''
+    return 0.5 * smax * (1. + R)
 
 
 def sa_goodman(sa0, sm, Rt):
@@ -351,13 +357,23 @@ def sa_tosa(sa0, sm, Rt, alp):
 
 
 def sa_boerstra(sa0, sm, Rt, alp):
-    ''' Stress amplitude according to Topper Sandor 1970
+    ''' Stress amplitude according to Boerstra 2007
     :param: sa0: float stress amplitude at zero means stress (R=-1)
     :param: sm: float mean stress
     :param: Rt: float tensile strength
     :return: sa: float stress amplitude
     '''
     return sa0 * (1. - (sm / Rt)**alp)
+
+
+def sm_boerstra(sa0, sa, Rt, alp):
+    ''' Mean stress according to Boerstra 2007
+    :param: sa0: float stress amplitude at zero means stress (R=-1)
+    :param: sa: float mean stress
+    :param: Rt: float tensile strength
+    :return: sm: float stress amplitude
+    '''
+    return Rt * (1. - sa / sa0)**(1. / alp)
 
 
 def sa_basquin(n, m, Rt):
@@ -549,23 +565,36 @@ def N_sa_sm_stuessi_boerstra(n, R, m, Rt, M, Re, Na, alp, n0=1.0):
     return n
 
 
-def N_smax_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp, n0=1.0):
-    b = _b(m, Re, Rt)
-
+def _Rnum(R):
+    EPS = 1E-12
     if R == -1.0:
-        Rnum = R + 1E-12
+        Rnum = R + EPS
     elif R == +1.0:
-        Rnum = R - 1E-12
+        Rnum = R - EPS
     else:
         Rnum = R
+    return Rnum
 
-    salp = (abs(smax * (1. + Rnum)) / (2. * Rt))**alp - 1.
 
-    rhs_nom = 0.5 * smax * (1. - Rnum) + Rt * salp
-    rhs_den = 0.5 * smax * (1. - Rnum) + Re * salp
+def _salp(smax, Rnum, Rt, alp):
+    return (abs(smax * (1. + Rnum)) / (2. * Rt))**alp - 1.
 
+
+def _rhs_nom(smax, Rnum, Rt, salp):
+    return 0.5 * smax * (1. - Rnum) + Rt * salp
+
+
+def _rhs_den(smax, Rnum, Re, salp):
+    return _rhs_nom(smax, Rnum, Re, salp)
+
+
+def N_smax_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp, n0=1.0):
+    b = _b(m, Re, Rt)
+    Rnum = _Rnum(R)
+    salp = _salp(smax, Rnum, Rt, alp)
+    rhs_nom = _rhs_nom(smax, Rnum, Rt, salp)
+    rhs_den = _rhs_den(smax, Rnum, Re, salp)
     rhs = 1. * rhs_nom / rhs_den
-
     n = n0 + Na * rhs**b
     return n
 
@@ -577,42 +606,22 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
             alp = poly1dlogx(n_, alp_c[0], alp_c[1], alp_c[2])
         elif alp_fit == 'exp':
             alp = explogx(n_, alp_c[0], alp_c[1], alp_c[2])
+        elif alp_fit == 'aki':
+            alp = alp_c(np.log10(n_))
 
         def fun(smax_):
-            if R == -1.0:
-                Rnum = R + 1E-12
-            elif R == +1.0:
-                Rnum = R - 1E-12
-            else:
-                Rnum = R
-
-            lhs_b = ((n_ - n0) / Na)**(1. / b)
-
-            #lhs = (n_ - n0) / Na
-
-            salp = (abs(smax_ * (1. + Rnum)) / (2. * Rt))**alp - 1.
-
-            rhs_nom = 0.5 * smax_ * (1. - Rnum) + Rt * salp
-            rhs_den = 0.5 * smax_ * (1. - Rnum) + Re * salp
-
+            Rnum = _Rnum(R)
+            lhs = ((n_ - n0) / Na)**(1. / b)
+            salp = _salp(smax_, Rnum, Rt, alp)
+            rhs_nom = _rhs_nom(smax_, Rnum, Rt, salp)
+            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
             rhs = -1. * rhs_nom / rhs_den
-
-            # rhs_b = (-1. * (0.5 * smax_ * (1. - Rnum) + Rt * salp) /
-            #       (0.5 * smax_ * (1. - Rnum) + Re * salp))**b
-            return lhs_b - rhs  # lhs - rhs_b
+            return lhs - rhs
 
         def fun_rhs_den(smax_):
-            if R == -1.0:
-                Rnum = R + 1E-12
-            elif R == +1.0:
-                Rnum = R - 1E-12
-            else:
-                Rnum = R
-
-            salp = (abs(smax_ * (1. + Rnum)) / (2. * Rt))**alp - 1.
-
-            rhs_den = 0.5 * smax_ * (1. - Rnum) + Re * salp
-
+            Rnum = _Rnum(R)
+            salp = _salp(smax_, Rnum, Rt, alp)
+            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
             return rhs_den
 
         def grad(smax_):
@@ -682,9 +691,17 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
     if isinstance(n, np.ndarray):
         smax = np.zeros_like(n)
         for ni, n_ in enumerate(n):
-            smax[ni] = getsmax(n_)
+            try:
+                smax[ni] = getsmax(n_)
+            except:
+                smax[ni] = np.nan
+                print 'Bisection failed for n_=%0.2e, R=%0.2f' % (n_, R)
     else:
-        smax = getsmax(n)
+        try:
+            smax = getsmax(n)
+        except:
+            smax = np.nan
+            print 'Bisection failed for n=%0.2e, R=%0.2f' % (n, R)
 
     return smax
 
@@ -1408,7 +1425,7 @@ class SNFit(object):
 
             self.cyc_data['cyc_ratio_grp'][i] = np.mean(cyc_ratios[grp])
 
-    def fit_data(self, include_weibull):
+    def fit_sn(self, include_weibull):
         '''
         :return: sn_fit: dict with fitting parameters
         '''
@@ -1536,7 +1553,52 @@ class SNFit(object):
         self.sn_fit['gamma'] = gamma
         self.sn_fit['Rt_50'] = Rt_50
 
-    def cld(self, ns):
+    def project_data(self, ns):
+
+        self.ns = ns
+        self.npoint = npoint = len(ns)
+
+        m_fit = self.sn_fit['m_fit']
+        Rt_fit = self.sn_fit['Rt_fit']
+        if self.fit_type == 'stuessi-boerstra':
+            Re_fit = self.sn_fit['Re_fit']
+            Na_fit = self.sn_fit['Na']
+
+        # project exp data points to (s_m/s_a/N)
+        ndat = len(self.cyc_data['cyc_stress_max'][self.cyc_data['grps']])
+
+        self.sa_proj = np.zeros((ndat, npoint))
+        self.sm_proj = np.zeros((ndat, npoint))
+
+        for ni, n_ in enumerate(ns):
+
+            for i, (smax_actual, R_, Nactual, xs) in enumerate(
+                zip(self.cyc_data['cyc_stress_max'][self.cyc_data['grps']],
+                    self.cyc_data['cyc_ratios'][self.cyc_data['grps']],
+                    self.cyc_data['cyc_cycles'][self.cyc_data['grps']],
+                    self.sn_fit['xs'])):
+
+                if R_ == 1:
+                    smax_fit = Rt_fit
+                else:
+                    if self.fit_type == 'stuessi-boerstra':
+                        smax_fit = smax_stuessi_boerstra(
+                            n_, R=R_, m=m_fit, Rt=Rt_fit,
+                            Re=Re_fit, Na=Na_fit, alp_c=self.alp_c,
+                            alp_fit=self.alp_fit, n0=self.n0)
+                    elif self.fit_type == 'basquin-goodman':
+                        smax_fit = smax_basquin_goodman(
+                            n_, R_, m_fit, Rt=Rt_fit, M=1)
+
+                smax_proj = smax_fit + xs
+
+                self.sa_proj[i, ni] = sa_smax(smax_proj, R_)
+                if R_ == 1:
+                    self.sm_proj[i, ni] = smax_proj
+                else:
+                    self.sm_proj[i, ni] = sm_smax(smax_proj, R_)
+
+    def fit_cld(self, alp_min=0.0, alp_idxs=[]):  # , alp_fit,
         '''
         Obtain CLD from SNfit
         :return: sas: array (ngrp+1,npoint) stress amplitudes
@@ -1544,61 +1606,155 @@ class SNFit(object):
         :return: sn_grp: dict with sub dicts of fitting parameters per group
         '''
 
-        self.ns = ns
-        ngrp = len(self.cyc_data['grplist'])
-        npoint = len(ns)
+        npoint = self.npoint
 
         nR = 1000
 
         self.sas = np.zeros((nR, npoint))
         self.sms = np.zeros((nR, npoint))
 
-        R = np.linspace(-1.0, +1.0, nR)
-
-        grps = self.cyc_data['grplist']
-        cyc_stress_max = self.cyc_data['cyc_stress_max']
-        cyc_cycles = self.cyc_data['cyc_cycles']
-        cyc_ratio_grp = self.cyc_data['cyc_ratio_grp']
-        m_fit = self.sn_fit['m_fit']
         Rt_fit = self.sn_fit['Rt_fit']
-        Re_fit = self.sn_fit['Re_fit']
-        Na_fit = self.sn_fit['Na']
-        alp_smax_fit = self.sn_fit['alpha']
-        bet_smax_fit = self.sn_fit['beta']
-        gam_smax_fit = self.sn_fit['gamma']
-        Rt_50 = self.sn_fit['Rt_50']
-        Re_50 = self.sn_fit['Re_50']
-        Re_50_R = self.sn_fit['Re_50_R']
-        n0 = self.n0
 
-        p = 0.50
-        M_fit = 1
-        for ni, n_ in enumerate(ns):
-            for Ri, R_ in enumerate(R):
-                if self.fit_type == 'stuessi-goodman':
-                    smax_50 = smax_stuessi_goodman_weibull(
-                        n_, R=R_, m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                        Re_fit=Re_fit, Na=Na_fit,
-                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                elif self.fit_type == 'stuessi-boerstra':
-                    try:
-                        smax_50 = smax_stuessi_boerstra_weibull(
-                            n_, R=R_, m=m_fit, Rt_fit=Rt_fit,
-                            Re_fit=Re_fit, Na=Na_fit, alp_c=self.alp_c, alp_fit=self.alp_fit,
-                            p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                    except:
-                        smax_50 = np.nan
-                self.sas[Ri, ni] = sa_50 = sa_smax(smax_50, R_)
-                if R_ == 1:
-                    sm_50 = smax_50
-                else:
-                    sm_50 = sm(sa_50, R_)
-                self.sms[Ri, ni] = sm_50
+        sm0 = Rt_fit
+        nsm = 1000
+        self.sms_b = np.linspace(0., sm0, nsm)
+        self.sas_b = np.zeros((nsm, npoint))
 
-    def shift_sn(self, dRt, p):
+        self.alp = np.zeros(npoint)
+        for ni in range(npoint):
+
+            #sa0_ = self.sas[-1, ni]
+            '''
+            def objective(params):
+                alp_, sa0_ = params  # multiple design variables
+
+                xdata = sm_proj[:, ni]
+                ydata = sa_proj[:, ni]
+
+                crits = []
+
+                for sm_, sa_ in zip(xdata, ydata):
+
+                    if not sa_ == 0.0:
+                        R_ = R_ratio(sm_, sa_)
+
+                        sa_fit = sa_boerstra(sa0_, sm_, Rt_fit, alp_)
+                        sm_fit = sm_boerstra(sa0_, sa_, Rt_fit, alp_)
+
+                        dsa = np.log10(sa_) - np.log10(abs(sa_fit))
+
+                        if R_ == 1.0:
+                            dsm = 1E-12
+                        else:
+                            dsm = np.log10(sm_) - np.log10(abs(sm_fit))
+
+                        dsasm = np.sign(dsa) * \
+                            (1. / ((1. / dsa**2) + (1. / dsm**2)))**0.5
+                        crits.append(dsasm)
+
+                critsum = abs(np.sum(np.array(crits)))
+
+                return critsum
+
+            alp_start = 0.9
+            sa0_start = Rt_fit
+            initial_guess = [alp_start, sa0_start]
+            options = {}
+            #options['xtol'] = 1E-1
+            options['disp'] = False
+            options['maxiter'] = 1E5
+            options['maxfev'] = 1E5
+            result = optimize.minimize(
+                objective, initial_guess,
+                method='Nelder-Mead',
+                #bounds=[(0.0, 2.0), (0.0, 1.5 * Rt_fit)],
+                options=options)
+            if result.success:
+                fitted_params = result.x
+            else:
+                raise ValueError(result.message)
+            popt = fitted_params
+
+            '''
+            xdata = self.sm_proj[:, ni]
+            ydata = self.sa_proj[:, ni]
+
+            if self.fit_type == 'stuessi-boerstra':
+                def func(x, alp, sa0_):
+                    return sa_boerstra(sa0_, x, Rt_fit, alp)
+
+                popt, pcov = optimize.curve_fit(
+                    func, xdata, ydata, p0=[1.0, Rt_fit],
+                    bounds=((alp_min, 0.0), (2.0, Rt_fit)))
+                # method='dogbox')
+
+                self.alp[ni] = popt[0]
+                sa0_ = popt[1]
+                self.sas_b[:, ni] = sa_boerstra(
+                    sa0_, self.sms_b, Rt_fit, self.alp[ni])
+            elif self.fit_type == 'basquin-goodman':
+                def func(x, sa0_):
+                    return sa_goodman(sa0_, x, Rt_fit)
+
+                popt, pcov = optimize.curve_fit(
+                    func, xdata, ydata, p0=[Rt_fit],
+                    bounds=((0.0), (Rt_fit)))
+                # method='dogbox')
+
+                sa0_ = popt[0]
+                self.sas_b[:, ni] = sa_goodman(sa0_, self.sms_b, Rt_fit)
+
+        '''
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        for i, n in enumerate(self.ns):
+            col = next(ax._get_lines.prop_cycler)['color']
+            ax.plot(self.sm_proj[:, i] * 1E-6, self.sa_proj[:, i] * 1E-6, 'd', color=col)
+            ax.plot(sm * 1E-6, sas_b[:, i] * 1E-6, '-', color=col)
+        '''
+        if self.fit_type == 'stuessi-boerstra':
+            if not alp_idxs:
+                alp_idxs = range(self.npoint)
+
+            self.alp[0] = 1.0  # force 1.0
+            #self.alp_fit = alp_fit = 'aki'
+
+            xdata = self.ns[alp_idxs]
+            ydata = self.alp[alp_idxs]
+            #popt = np.polyfit(xdata, ydata, 1)
+            if self.alp_fit == 'lin':
+                popt, pcov = optimize.curve_fit(poly1dlogx, xdata, ydata)
+            elif self.alp_fit == 'exp':
+                popt, pcov = optimize.curve_fit(explogx, xdata, ydata)
+            elif self.alp_fit == 'aki':
+                popt = interpolate.Akima1DInterpolator(np.log10(xdata), ydata)
+            self.alp_c = alp_opt = popt
+
+        '''
+        import matplotlib.pyplot as plt
+        exp_start = 0  # 10^0
+        exp_end = 8  # 10^7
+        nsf = np.logspace(exp_start, exp_end, 1000)
+        fig, ax = plt.subplots()
+        ax.semilogx(ns, self.alp, 'o', label=r'Boerstra exponent $\alpha$')
+        ax.semilogx(nsf, popt(np.log10(nsf)), '-')
+        ax.semilogx(nsf, explogx(nsf, *alp_opt), '-',
+                    label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (alp_opt[0], alp_opt[1], alp_opt[2]))
         '''
 
-        '''
+    def fit_data(self, ns, include_weibull, alp_idxs):
+
+        # start values
+        alp_min = 0.3
+        self.alp_fit = 'exp'
+        self.alp_c = [1., 0., 0.]
+
+        for i in range(5):
+            self.fit_sn(include_weibull)
+            self.project_data(ns)
+            self.alp_fit = 'aki'
+            self.fit_cld(alp_min, alp_idxs)
+            print self.alp
 
 
 class CLDFit(SNFit):
@@ -1630,7 +1786,7 @@ class CLDFit(SNFit):
 
         for i, grp_entries in enumerate(grp_entries_list):
             self.load_data(data, grp_entries)
-            self.fit_data(include_weibull=False)  # works only w/o
+            self.fit_sn(include_weibull=False)  # works only w/o
 
             self.sn_grp[i] = OrderedDict()
             self.sn_grp[i]['sn_fit'] = self.sn_fit
@@ -1674,8 +1830,9 @@ class CLDFit(SNFit):
         del self.sn_fit
         del self.cyc_data
 
-    def fit_alp(self, alp_fit='exp', alp_idxs=[]):
+    def fit_alp(self, alp_min=0.4, alp_fit='exp', alp_idxs=[]):
 
+        self.alp_min = alp_min
         self.alp_fit = alp_fit
 
         sm0 = Rt = self.sms[0, 0]
@@ -1694,14 +1851,15 @@ class CLDFit(SNFit):
         for ni in range(npoint):
             xdata = self.sms[:, ni]
             ydata = self.sas[:, ni]
-            sa0_ = self.sas[-1, ni]
+            #sa0_ = self.sas[-1, ni]
 
-            def func(x, alp):
+            def func(x, alp, sa0_):
                 return sa_boerstra(sa0_, x, Rt, alp)
 
-            popt, pcov = optimize.curve_fit(func, xdata, ydata)
+            popt, pcov = optimize.curve_fit(
+                func, xdata, ydata, bounds=((self.alp_min, 0.0), (1.0, Rt)))
             self.alp[ni] = popt[0]
-
+            sa0_ = popt[1]
             sas_b[:, ni] = sa_boerstra(sa0_, sm, Rt, self.alp[ni])
         '''
         import matplotlib.pyplot as plt
@@ -1724,14 +1882,17 @@ class CLDFit(SNFit):
             popt, pcov = optimize.curve_fit(poly1dlogx, xdata, ydata)
         elif alp_fit == 'exp':
             popt, pcov = optimize.curve_fit(explogx, xdata, ydata)
+        elif alp_fit == 'aki':
+            popt = interpolate.Akima1DInterpolator(np.log10(xdata), ydata)
         self.alp_c = alp_opt = popt
         '''
         import matplotlib.pyplot as plt
         exp_start = 0  # 10^0
-        exp_end = 7  # 10^7
+        exp_end = 8  # 10^7
         nsf = np.logspace(exp_start, exp_end, 1000)
         fig, ax = plt.subplots()
         ax.semilogx(ns, self.alp, 'o', label=r'Boerstra exponent $\alpha$')
+        ax.semilogx(nsf, popt(np.log10(nsf)),'-')
         ax.semilogx(nsf, explogx(nsf, *alp_opt), '-',
                     label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (alp_opt[0], alp_opt[1], alp_opt[2]))
         ax.semilogx(nsf, poly1dlogx(nsf,*alp_opt), '-.')

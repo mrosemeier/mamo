@@ -543,18 +543,22 @@ def N_stuessi(sa, m, Rt, Re, Na, n0=1.0):
     return n0 - Na * ((Rt - sa) / (sa - Re))**b
 
 
+def _nNa(n, n0, Na, b):
+    return ((n - n0) / Na)**(1. / b)
+
+
 def sa_stuessi_boerstra(n, R, m, Rt, M, Re, Na, alp, n0=1.0):
     b = _b(m, Re, Rt)
-    n_ = ((n - n0) / Na)**(1. / b)
-    sa = (1. - (sm / Rt)**alp) * (Re * n_ + Rt) / (1. + n_)
+    nNa = _nNa(n, n0, Na, b)
+    sa = (1. - (sm / Rt)**alp) * (Re * nNa + Rt) / (1. + nNa)
     return sa
 
 
 def sm_stuessi_boerstra(n, R, m, Rt, M, Re, Na, d, n0=1.0):
     b = _b(m, Re, Rt)
-    n_ = ((n - n0) / Na)**(1. / b)
+    nNa = _nNa(n, n0, Na, b)
     #sm = Rt * ((sa * (n_ - 1.) + Re * n_ + Rt) / (Re * n_ + Rt))**(1. / d)
-    sm = Rt * (1. - sa * (n_ - 1.) / (Re * n_ + Rt))**(1. / d)
+    sm = Rt * (1. - sa * (nNa - 1.) / (Re * nNa + Rt))**(1. / d)
     return sm
 
 
@@ -594,7 +598,7 @@ def N_smax_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp, n0=1.0):
     salp = _salp(smax, Rnum, Rt, alp)
     rhs_nom = _rhs_nom(smax, Rnum, Rt, salp)
     rhs_den = _rhs_den(smax, Rnum, Re, salp)
-    rhs = 1. * rhs_nom / rhs_den
+    rhs = -1. * rhs_nom / rhs_den
     n = n0 + Na * rhs**b
     return n
 
@@ -611,7 +615,7 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
 
         def fun(smax_):
             Rnum = _Rnum(R)
-            lhs = ((n_ - n0) / Na)**(1. / b)
+            lhs = _nNa(n_, n0, Na, b)
             salp = _salp(smax_, Rnum, Rt, alp)
             rhs_nom = _rhs_nom(smax_, Rnum, Rt, salp)
             rhs_den = _rhs_den(smax_, Rnum, Re, salp)
@@ -686,6 +690,64 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
 
     smax_start = Rt
     smin_start = Re
+    smax_delta = 1E-6
+
+    if isinstance(n, np.ndarray):
+        smax = np.zeros_like(n)
+        for ni, n_ in enumerate(n):
+            try:
+                smax[ni] = getsmax(n_)
+            except:
+                smax[ni] = np.nan
+                print 'Bisection failed for n_=%0.2e, R=%0.2f' % (n_, R)
+    else:
+        try:
+            smax = getsmax(n)
+        except:
+            smax = np.nan
+            print 'Bisection failed for n=%0.2e, R=%0.2f' % (n, R)
+
+    return smax
+
+
+def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
+
+    def getsmax(n_):
+        if alp_fit == 'lin':
+            alp = poly1dlogx(n_, alp_c[0], alp_c[1], alp_c[2])
+        elif alp_fit == 'exp':
+            alp = explogx(n_, alp_c[0], alp_c[1], alp_c[2])
+        elif alp_fit == 'aki':
+            alp = alp_c(np.log10(n_))
+
+        def fun(smax_):
+            Rnum = _Rnum(R)
+            lhs = n_**(1. / m)
+            salp = _salp(smax_, Rnum, Rt, alp)
+            rhs = -1. * 2. * Rt * salp / (smax_ * (1. - Rnum))
+            return lhs - rhs
+
+        '''
+        import matplotlib.pyplot as plt
+        #smax_ = np.linspace(smin_start, smax_start, 100)
+        smax_ = np.linspace(0, smax_start, 100)
+        fig, ax = plt.subplots()
+        ax.plot(smax_, fun(smax_))
+        plt.ylim(-1., None)
+        plt.xlim(15E6, 15.1E6)
+        '''
+
+        if n_ == 1 and R >= -1.:
+            smax = Rt
+        else:
+            # try find asymptote (if it exists) and use as lower bound
+            # asymptote is found when denominater = zero
+            sasymp = 0.
+            smax = bisection(fun, lower=sasymp + smax_delta, upper=smax_start,
+                             tol=1e-6, maxiter=100, callback=None)
+        return smax
+
+    smax_start = Rt
     smax_delta = 1E-6
 
     if isinstance(n, np.ndarray):
@@ -861,6 +923,11 @@ def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p
         smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n0)
 
 
+def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
+    return x_weibull(p, alpha, beta, gamma) +\
+        smax_basquin_boerstra(n, R, m, Rt_fit, alp_c, alp_fit)
+
+
 def smax_limit_stuessi_goodman_weibull(p, R, Rt_fit, M, Re_fit, alpha, beta, gamma):
     '''
     Endurance limit as function of p and R
@@ -905,6 +972,13 @@ def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit,
     :return: xrand: float value
     '''
     return smax_i - smax_stuessi_boerstra(N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit, n0)
+
+
+def xrand_smax_basquin_boerstra(smax_i, N_i, R_i, Rt_fit, m_fit, alp_c, alp_fit):
+    ''' Random variable x using smax
+    :return: xrand: float value
+    '''
+    return smax_i - smax_basquin_boerstra(N_i, R_i, m_fit, Rt_fit, alp_c, alp_fit)
 
 
 def fit_basquin_goodman(cyc_data,
@@ -1045,6 +1119,86 @@ def fit_basquin_goodman_weibull(cyc_data,
 
             xs[i] = xrand_smax_basquin_goodman(
                 smax_actual, Nactual, R, m_fit, Rt_fit, M_fit=1)
+
+        alp, bet, gam = pwm_weibull(xs)
+
+    return m_fit, Rt_fit, alp, bet, gam, xs
+
+
+def fit_basquin_boerstra_weibull(cyc_data,
+                                 m_start=11.,
+                                 Rt_start=40.,
+                                 alp_c=[1., 0., 0.],
+                                 alp_fit='exp',
+                                 include_weibull=False):
+    '''
+    Fits m and Rt to a set of experimental data
+    :param: cyc_data: dict with experimental data
+    :param: m_start: float start value
+    :param: Rt_start: float start value
+    :return: m_fit
+    :return: Rt_fit
+    '''
+
+    initial_guess = [m_start, Rt_start]
+
+    if include_weibull:
+        global alp, bet, gam, xs
+
+    def objective(params):
+        m, Rt = params  # multiple design variables
+        M = 1  # constants
+        if include_weibull:
+            global alp, bet, gam, xs
+            xs = np.zeros(len(cyc_data['grps']))
+            for i, (smax_actual, R, Nactual) in enumerate(
+                zip(cyc_data['cyc_stress_max'][cyc_data['grps']],
+                    cyc_data['cyc_ratios'][cyc_data['grps']],
+                    cyc_data['cyc_cycles'][cyc_data['grps']])):
+
+                xs[i] = xrand_smax_basquin_boerstra(
+                    smax_actual, Nactual, R, Rt, m, alp_c, alp_fit)
+
+            alp, bet, gam = pwm_weibull(xs)
+
+        crits = []
+
+        for i, (smax_actual, R, Nactual) in enumerate(zip(cyc_data['cyc_stress_max'][cyc_data['grps']],
+                                                          cyc_data['cyc_ratios'][cyc_data['grps']],
+                                                          cyc_data['cyc_cycles'][cyc_data['grps']])):
+
+            p = 0.50
+            if include_weibull:
+                smax_50 = smax_basquin_boerstra_weibull(
+                    Nactual, R=R, m=m, Rt_fit=Rt, alp_c=alp_c, alp_fit=alp_fit,
+                    p=p, alpha=alp, beta=bet, gamma=gam)
+            else:
+                smax_50 = smax_basquin_boerstra(
+                    Nactual, R=R, m=m, Rt=Rt, alp_c=alp_c, alp_fit=alp_fit)
+            crit1 = (np.log10(smax_50) - np.log10(smax_actual))**2
+            crits.append(crit1)
+
+        critsum = np.sum(np.array(crits))  # objective function
+        return critsum
+
+    result = optimize.minimize(objective, initial_guess, method='Nelder-Mead')
+    if result.success:
+        fitted_params = result.x
+        # print(fitted_params)
+    else:
+        raise ValueError(result.message)
+
+    m_fit, Rt_fit = fitted_params
+
+    if not include_weibull:
+        xs = np.zeros(len(cyc_data['grps']))
+        for i, (smax_actual, R, Nactual) in enumerate(
+                zip(cyc_data['cyc_stress_max'][cyc_data['grps']],
+                    cyc_data['cyc_ratios'][cyc_data['grps']],
+                    cyc_data['cyc_cycles'][cyc_data['grps']])):
+
+            xs[i] = xrand_smax_basquin_boerstra(
+                smax_actual, Nactual, R, Rt_fit, m_fit, alp_c, alp_fit)
 
         alp, bet, gam = pwm_weibull(xs)
 
@@ -1485,6 +1639,23 @@ class SNFit(object):
             self.sn_fit['Re_50'] = Re_50
             self.sn_fit['Re_50_R'] = Re_50_R.tolist()
 
+        elif self.fit_type == 'basquin-boerstra':
+            m_fit, Rt_fit, alpha_, beta_, gamma_, xs =\
+                fit_basquin_boerstra_weibull(self.cyc_data,
+                                             self.m_start,
+                                             self.Rt_start,
+                                             self.alp_c,
+                                             self.alp_fit,
+                                             include_weibull)
+
+            Rt_50 = smax_limit_basquin_goodman_weibull(p=0.5,
+                                                       Rt_fit=Rt_fit,
+                                                       alpha=alpha_,
+                                                       beta=beta_,
+                                                       gamma=gamma_)
+
+            alpha, beta, gamma = alpha_, beta_, gamma_
+
         elif self.fit_type == 'stuessi-boerstra':
 
             m_fit, Rt_fit, Re_fit, Na, alpha_, beta_, gamma_, xs =\
@@ -1589,6 +1760,11 @@ class SNFit(object):
                     elif self.fit_type == 'basquin-goodman':
                         smax_fit = smax_basquin_goodman(
                             n_, R_, m_fit, Rt=Rt_fit, M=1)
+                    elif self.fit_type == 'basquin-boerstra':
+                        smax_fit = smax_basquin_boerstra(
+                            n_, R_, m_fit, Rt=Rt_fit,
+                            alp_c=self.alp_c,
+                            alp_fit=self.alp_fit)
 
                 smax_proj = smax_fit + xs
 
@@ -1679,7 +1855,7 @@ class SNFit(object):
             xdata = self.sm_proj[:, ni]
             ydata = self.sa_proj[:, ni]
 
-            if self.fit_type == 'stuessi-boerstra':
+            if self.fit_type == 'basquin-boerstra' or self.fit_type == 'stuessi-boerstra':
                 def func(x, alp, sa0_):
                     return sa_boerstra(sa0_, x, Rt_fit, alp)
 
@@ -1692,7 +1868,7 @@ class SNFit(object):
                 sa0_ = popt[1]
                 self.sas_b[:, ni] = sa_boerstra(
                     sa0_, self.sms_b, Rt_fit, self.alp[ni])
-            elif self.fit_type == 'basquin-goodman':
+            elif self.fit_type == 'basquin-goodman' or self.fit_type == 'stuessi-goodman':
                 def func(x, sa0_):
                     return sa_goodman(sa0_, x, Rt_fit)
 
@@ -1712,7 +1888,7 @@ class SNFit(object):
             ax.plot(self.sm_proj[:, i] * 1E-6, self.sa_proj[:, i] * 1E-6, 'd', color=col)
             ax.plot(sm * 1E-6, sas_b[:, i] * 1E-6, '-', color=col)
         '''
-        if self.fit_type == 'stuessi-boerstra':
+        if self.fit_type == 'basquin-boerstra' or self.fit_type == 'stuessi-boerstra':
             if not alp_idxs:
                 alp_idxs = range(self.npoint)
 
@@ -1745,7 +1921,7 @@ class SNFit(object):
     def fit_data(self, ns, include_weibull, alp_idxs):
 
         # start values
-        alp_min = 0.3
+        alp_min = 0.0
         self.alp_fit = 'exp'
         self.alp_c = [1., 0., 0.]
 

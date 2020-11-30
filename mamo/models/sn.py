@@ -66,6 +66,13 @@ def explogx(x, a, b, c):
     return a * x**-b + c
 
 
+def explogx1(x, a, b):
+    ''' Exponential function that goes through point (1,1)
+    c=1-a
+    '''
+    return a * (x**-b - 1.) + 1.
+
+
 def poly1dlogx(x, a, b, c):
     return a * np.log10(x) + b
 
@@ -386,6 +393,39 @@ def sa_basquin(n, m, Rt):
     return Rt * n**(-1. / m)
 
 
+def dsa_dn_basquin(n, m, Rt):
+    '''
+    Gradient of stress amplitude of an SN curve according to Basquin
+    :param: n: float cycle number
+    :param: m: float negative inverse SN curve coefficient
+    :param: Rt: float static strength
+    :return: sa: float stress amplitude
+    '''
+    return - Rt * n**(-1. / m - 1.) / m
+
+
+def N_basquin(sax, m, N1, sa1):
+    ''' Cycle number Nx for a given load level sx in according to Basquin
+    :param: sax: float target load level
+    :param: m: float negative inverse SN curve coefficient at point 1 (stress amplitude)
+    :param: N1: float cycles at point 1
+    :param: sa1: float load level at point 1 (stress amplitude)
+    :return: Nx: float corresponding cycles to sax
+    '''
+    return N1 * (sax / sa1)**(-m)
+
+
+def m_basquin(Rt, sa1, N1):
+    ''' Negative inverse SN curve exponent for a given Rt and point in SN grid
+     according to Basquin
+    :param: Rt: float static strength
+    :param: N1: float cycles at point 1
+    :param: sa1: float load level at point 1 (stress amplitude)
+    :return: m: float negative inverse SN curve exponent
+    '''
+    return 1. / (np.log(Rt / sa1) / np.log(N1))
+
+
 def smax_basquin_goodman(n, R=-1, m=10, Rt=1.0, M=1):
     '''
     Max stress for given cycle number of an SN curve according to
@@ -505,14 +545,14 @@ def _b(m, Re, Rt):
     Transforms Basquin's m into Stuessi's b
     (1) Derive Basquin for s: dn/ds(s) = -(Na*m*(s/R_a)**(-m))/s
     (2) Derive Stuessi for s: dn/ds(s) = -(Na*b*(Re-Rt)*
-                                    ((-Re+s)/(Rt-s))**(-b))/((Re-s)*(Rt-s))
+                                    ((s-Rt)/(Re-s))**(b-1))/((Re-s)**2)
     (3) Set R_a = 0.5*(Re+Rt)
     (4) Set (1)=(2) with (3) and solve for b
     '''
-    return (m * (-Re + Rt)) / (2 * (Re + Rt))
+    return (m * (-Re + Rt)) / (2. * (Re + Rt))
 
 
-def sa_stuessi(n, R, m, Rt, M, Re, Na, n0=1.0):
+def sa_stuessi(n, m, Rt, Re, Na, n0=1.0):
     '''
     Stress amplitude of an SN curve according to Stuessi
     :param: n: float cycle number
@@ -524,8 +564,24 @@ def sa_stuessi(n, R, m, Rt, M, Re, Na, n0=1.0):
     :return: sa: float allowable stress amplitude
     '''
     b = _b(m, Re, Rt)
-    return (Re * ((n - n0) / Na)**(1. / b) + Rt) / \
-        (1. + ((n - n0) / Na)**(1. / b))
+    nNa = _nNa(n, n0, Na, b)
+    return (Re * nNa + Rt) / (1. + nNa)
+
+
+def dsa_dn_stuessi(n, m, Rt, Re, Na, n0=1.0):
+    '''
+    Gradient of stress amplitude of an SN curve according to Stuessi
+    :param: n: float cycle number
+    :param: m: float negative inverse SN curve coefficient at Na for R=-1
+    :param: Rt: float static strength
+    :param: Re: float endurance limit for R=-1
+    :param: Na: float turning point
+    :param: n0: intersection with smax axis
+    :return: sa: float allowable stress amplitude
+    '''
+    b = _b(m, Re, Rt)
+    nNa = _nNa(n, n0, Na, b)
+    return ((Re - Rt) * nNa) / (b * (n - n0) * (nNa + 1.)**2)
 
 
 def N_stuessi(sa, m, Rt, Re, Na, n0=1.0):
@@ -540,7 +596,7 @@ def N_stuessi(sa, m, Rt, Re, Na, n0=1.0):
     :return: sa: float allowable stress amplitude
     '''
     b = _b(m, Re, Rt)
-    return n0 - Na * ((Rt - sa) / (sa - Re))**b
+    return n0 + Na * ((Rt - sa) / (sa - Re))**b
 
 
 def _nNa(n, n0, Na, b):
@@ -716,7 +772,7 @@ def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
         if alp_fit == 'lin':
             alp = poly1dlogx(n_, alp_c[0], alp_c[1], alp_c[2])
         elif alp_fit == 'exp':
-            alp = explogx(n_, alp_c[0], alp_c[1], alp_c[2])
+            alp = explogx1(n_, alp_c[0], alp_c[1])
         elif alp_fit == 'aki':
             alp = alp_c(np.log10(n_))
 
@@ -829,11 +885,11 @@ def smax_limit_stuessi_goodman_RdRt(R, Rt, Rd_Rt, M=1):
     return (2. * Rd_Rt * Rt) / (Rd_Rt * M * (R + 1.) + (1. - R))
 
 
-def xrand_sa_stuessi(sa_i, N_i, R_i, m_fit, Rt_fit, M_fit, Re_fit, Na_fit, n0=0.):
+def xrand_sa_stuessi(sa_i, N_i, m_fit, Rt_fit, Re_fit, Na_fit, n0=0.):
     ''' Random variable x using sa
     :return: xrand: float value
     '''
-    return sa_i - sa_stuessi(N_i, R_i, m_fit, Rt_fit, M_fit, Re_fit, Na_fit, n0)
+    return sa_i - sa_stuessi(N_i, m_fit, Rt_fit, Re_fit, Na_fit, n0)
 
 
 def xrand_smax_stuessi_goodman(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, Re_fit, Na_fit, n0=0.):
@@ -843,14 +899,12 @@ def xrand_smax_stuessi_goodman(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, Re_fit, N
     return smax_i - smax_stuessi_goodman(N_i, R_i, m_fit, Rt_fit, M_fit, Re_fit, Na_fit, n0)
 
 
-def sa_stuessi_weibull(n, R, m, Rt_fit, M, Re_fit, Na, p, alpha, beta, gamma, n0):
+def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, alpha, beta, gamma, n0):
     '''
     Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
-    :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt_fit: float static strength (fit)
-    :param: M: mean stress sensitivity
     :param: Re_fit: float endurance limit for R=-1 (fit)
     :param: Na: float turning point
     :param: p: float probability
@@ -859,7 +913,7 @@ def sa_stuessi_weibull(n, R, m, Rt_fit, M, Re_fit, Na, p, alpha, beta, gamma, n0
     :param: gamma: float Weibull parameter
     :return: sa: float allowable maximum stress
     '''
-    return x_weibull(p, alpha, beta, gamma) + sa_stuessi(n, R, m, Rt_fit, M, Re_fit, Na, n0)
+    return x_weibull(p, alpha, beta, gamma) + sa_stuessi(n, m, Rt_fit, Re_fit, Na, n0)
 
 
 def smax_stuessi_goodman_weibull(n, R, m, Rt_fit, M, Re_fit, Na, p, alpha, beta, gamma, n0):
@@ -965,6 +1019,15 @@ def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
     and (-Re_fit + Rt_fit) = (-Re_tar + Rt_tar)
     '''
     return m_fit * (Re_tar + Rt_tar) / (Re_fit + Rt_fit)
+
+
+def m_touch(n, m, Rt, Re, Na, n0):
+    ''' 
+    sa_basquin != sa_stuessi, solve for mt (Basquin)
+    :param: n: float cycle number at which Basqiun should intersect Stuessi 
+    :return: mt: float negative inverse SN curve exponent for n
+    '''
+    return np.log(n) / np.log(Rt / sa_stuessi(n, m, Rt, Re, Na, n0))
 
 
 def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit, n0=0.):
@@ -1246,7 +1309,7 @@ def fit_stuessi_weibull(cyc_data,
                     cyc_data['cyc_ratios'][cyc_data['grps']],
                     cyc_data['cyc_cycles'][cyc_data['grps']])):
                 xs_smax[i] = xrand_sa_stuessi(
-                    smax_actual, Nactual, R, m, Rt, M, Re, Na, n0)
+                    smax_actual, Nactual, m, Rt, Re, Na, n0)
 
             alp, bet, gam = pwm_weibull(xs_smax)
 
@@ -1259,13 +1322,12 @@ def fit_stuessi_weibull(cyc_data,
             p = 0.50
             if include_weibull:
                 smax_50 = sa_stuessi_weibull(
-                    Nactual, R=R, m=m, Rt_fit=Rt, M=M,
+                    Nactual, m=m, Rt_fit=Rt,
                     Re_fit=Re, Na=Na,
                     p=p, alpha=alp, beta=bet, gamma=gam, n0=n0)
             else:
                 smax_50 = sa_stuessi(
-                    Nactual, R=R, m=m, Rt=Rt, M=M,
-                    Re=Re, Na=Na, n0=n0)
+                    Nactual, m=m, Rt=Rt, Re=Re, Na=Na, n0=n0)
 
             crit1 = (np.log10(smax_50) - np.log10(smax_actual))**2
 
@@ -1901,7 +1963,7 @@ class SNFit(object):
             if self.alp_fit == 'lin':
                 popt, pcov = optimize.curve_fit(poly1dlogx, xdata, ydata)
             elif self.alp_fit == 'exp':
-                popt, pcov = optimize.curve_fit(explogx, xdata, ydata)
+                popt, pcov = optimize.curve_fit(explogx1, xdata, ydata)
             elif self.alp_fit == 'aki':
                 popt = interpolate.Akima1DInterpolator(np.log10(xdata), ydata)
             self.alp_c = alp_opt = popt
@@ -1914,7 +1976,7 @@ class SNFit(object):
         fig, ax = plt.subplots()
         ax.semilogx(ns, self.alp, 'o', label=r'Boerstra exponent $\alpha$')
         ax.semilogx(nsf, popt(np.log10(nsf)), '-')
-        ax.semilogx(nsf, explogx(nsf, *alp_opt), '-',
+        ax.semilogx(nsf, explogx1(nsf, *alp_opt), '-',
                     label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (alp_opt[0], alp_opt[1], alp_opt[2]))
         '''
 
@@ -1931,6 +1993,99 @@ class SNFit(object):
             self.alp_fit = 'aki'
             self.fit_cld(alp_min, alp_idxs)
             print self.alp
+
+    def touch_basquin_boerstra(self, p=0.05):
+        ''' Find the neg. inv. S/N curve exponent for a Basquin fit that touches
+         a p% quantile Stuessi curve
+        '''
+        m_fit = self.sn_fit['m_fit']
+        Rt_fit = self.sn_fit['Rt_fit']
+        Re_fit = self.sn_fit['Re_fit']
+        Na = self.sn_fit['Na']
+        alpha = self.sn_fit['alpha']
+        beta = self.sn_fit['beta']
+        gamma = self.sn_fit['gamma']
+
+        Rt_p, Re_p = smax_limit_stuessi_goodman_weibull(p=p,
+                                                        R=-1,
+                                                        Rt_fit=Rt_fit,
+                                                        M=1,
+                                                        Re_fit=Re_fit,
+                                                        alpha=alpha,
+                                                        beta=beta,
+                                                        gamma=gamma)
+        # neg inv SN curve exponent at turning point
+        m_p = m_RtRd(m_fit, Rt_fit, Re_fit, Rt_p, Re_p)
+
+        '''
+        N1 = Na  # cycles at turning point
+        sa1 = 0.5 * (Rt_p + Re_p)  # stress level at Na (turning point)
+        # cycles at intersection point Nd/sd between turning point tangent and edunrance limit
+        # line
+        Nd = N_basquin(Re_p, m_p, N1, sa1)
+        R = -1
+        # stress at Nd
+        sd = smax_stuessi_boerstra_weibull(
+            Nd, R, m_fit, Rt_fit, Re_fit, self.alp_c, self.alp_fit, Na, p, alpha, beta, gamma, self.n0)
+        # neg inv SN curve exponent through Rt and Nd/sd
+        m_touch = m_basquin(Rt_p, sd, Nd)
+        '''
+
+        def fun(n_):
+            # neg inv SN curve exponent at n_ on Stuessi curve
+            mt_ = m_touch(n_, m_p, Rt_p, Re_p, Na, self.n0)
+            # gradient of basquin != gadient of stuessi
+            lhs = dsa_dn_basquin(n_, mt_, Rt_p)
+            rhs = dsa_dn_stuessi(n_, m_p, Rt_p, Re_p, Na, self.n0)
+            return lhs - rhs
+
+        '''
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.semilogx(ns, fun(ns))
+        plt.ylim(-1., None)
+        plt.xlim(15E6, 15.1E6)
+        '''
+
+        N_start = Na
+        N_end = self.ns[-1]
+        # touch point cycle number
+        Nt = bisection(fun, lower=N_start, upper=N_end,
+                       tol=1e-6, maxiter=100, callback=None)
+        # neg inv sn curve exponent through touch point
+        mt = m_touch(Nt, m_p, Rt_p, Re_p, Na, self.n0)
+
+        # refit alp for touch curve through 3 points
+        # point 1: (N=1, alp=1)
+        # point 2: (Nt, alpt)
+        # point 3: (Ne=1E6, alpe)
+        Ne = 1E+6
+        # alp at Nt
+        alpt = self.alp_c(np.log10(Nt))
+        alpe = self.alp_c(np.log10(Ne))
+
+        xdata = np.array([Nt, Ne])
+        ydata = np.array([alpt, alpe])
+        popt, pcov = optimize.curve_fit(explogx1, xdata, ydata)
+
+        self.alpt_c = popt
+        self.alpt_fit = 'exp'
+        '''
+        import matplotlib.pyplot as plt
+        exp_start = 0  # 10^0
+        exp_end = 8  # 10^8
+        nsf = np.logspace(exp_start, exp_end, 1000)
+        fig, ax = plt.subplots()
+        ax.semilogx(xdata, ydata, 'o')
+        ax.semilogx(nsf, explogx1(nsf, *popt), '-')
+
+        '''
+
+        self.sn_fit['Nt'] = Nt
+        self.sn_fit['alpt_c'] = self.alpt_c.tolist()
+        self.sn_fit['Re_p'] = Re_p
+        self.sn_fit['Rt_p'] = Rt_p
+        self.sn_fit['mt'] = mt
 
 
 class CLDFit(SNFit):
@@ -1993,7 +2148,7 @@ class CLDFit(SNFit):
             R = cyc_ratio_grp[gidx]
             p = 0.50
             smax_50 = sa_stuessi_weibull(
-                ns, R=R, m=m_fit, Rt_fit=Rt_fit, M=M_fit,
+                ns, m=m_fit, Rt_fit=Rt_fit,
                 Re_fit=Re_fit, Na=Na_fit,
                 p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
 
@@ -2057,7 +2212,7 @@ class CLDFit(SNFit):
         if alp_fit == 'lin':
             popt, pcov = optimize.curve_fit(poly1dlogx, xdata, ydata)
         elif alp_fit == 'exp':
-            popt, pcov = optimize.curve_fit(explogx, xdata, ydata)
+            popt, pcov = optimize.curve_fit(explogx1, xdata, ydata)
         elif alp_fit == 'aki':
             popt = interpolate.Akima1DInterpolator(np.log10(xdata), ydata)
         self.alp_c = alp_opt = popt

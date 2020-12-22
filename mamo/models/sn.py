@@ -288,11 +288,7 @@ def smax_sa(sa, R):
     :param: R: float stress ratio
     :return: smax: float allowable maximum stress
     '''
-    if R == 1:
-        smax = sa
-    else:
-        smax = sa * ((1. + R) / (1. - R) + 1)
-    return smax
+    return 2. * sa / (1. - R)
 
 
 def sa_smax(smax, R):
@@ -730,10 +726,13 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
         else:
             # try find asymptote (if it exists) and use as lower bound
             # asymptote is found when denominater = zero
-            sasymp = bisection(fun_rhs_den, lower=0., upper=smax_start,
-                               tol=1e-6, maxiter=100, callback=None)
-            smax = bisection(fun, lower=sasymp + smax_delta, upper=smax_start,
-                             tol=1e-6, maxiter=100, callback=None)
+            sasymp = optimize.brentq(f=fun_rhs_den, a=0., b=smax_start)
+            # bisection(fun_rhs_den, lower=0., upper=smax_start,
+            # tol=1e-6, maxiter=100, callback=None)
+            smax = optimize.brentq(
+                f=fun, a=sasymp + smax_delta, b=smax_start)
+            # smax = bisection(fun, lower=sasymp + smax_delta, upper=smax_start,
+            #                 tol=1e-6, maxiter=100, callback=None)
         # except:
         #    smax = sasymp
         # bnewton(fun, grad, lower=smin_start, upper=smax_start,
@@ -755,13 +754,13 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n0=1.0):
                 smax[ni] = getsmax(n_)
             except:
                 smax[ni] = np.nan
-                print 'Bisection failed for n_=%0.2e, R=%0.2f' % (n_, R)
+                print 'Brentq failed for n_=%0.2e, R=%0.2f' % (n_, R)
     else:
         try:
             smax = getsmax(n)
         except:
             smax = np.nan
-            print 'Bisection failed for n=%0.2e, R=%0.2f' % (n, R)
+            print 'Brentq failed for n=%0.2e, R=%0.2f' % (n, R)
 
     return smax
 
@@ -799,8 +798,9 @@ def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
             # try find asymptote (if it exists) and use as lower bound
             # asymptote is found when denominater = zero
             sasymp = 0.
-            smax = bisection(fun, lower=sasymp + smax_delta, upper=smax_start,
-                             tol=1e-6, maxiter=100, callback=None)
+            # smax = bisection(fun, lower=sasymp + smax_delta, upper=smax_start,
+            #                 tol=1e-6, maxiter=100, callback=None)
+            smax = optimize.brentq(f=fun, a=sasymp + smax_delta, b=smax_start)
         return smax
 
     smax_start = Rt
@@ -813,13 +813,13 @@ def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
                 smax[ni] = getsmax(n_)
             except:
                 smax[ni] = np.nan
-                print 'Bisection failed for n_=%0.2e, R=%0.2f' % (n_, R)
+                print 'Brentq failed for n_=%0.2e, R=%0.2f' % (n_, R)
     else:
         try:
             smax = getsmax(n)
         except:
             smax = np.nan
-            print 'Bisection failed for n=%0.2e, R=%0.2f' % (n, R)
+            print 'Brentq failed for n=%0.2e, R=%0.2f' % (n, R)
 
     return smax
 
@@ -2050,8 +2050,9 @@ class SNFit(object):
         N_start = Na
         N_end = self.ns[-1]
         # touch point cycle number
-        Nt = bisection(fun, lower=N_start, upper=N_end,
-                       tol=1e-6, maxiter=100, callback=None)
+        # Nt = bisection(fun, lower=N_start, upper=N_end,
+        #               tol=1e-6, maxiter=100, callback=None)
+        Nt = optimize.brentq(f=fun, a=N_start, b=N_end)
         # neg inv sn curve exponent through touch point
         mt = m_touch(Nt, m_p, Rt_p, Re_p, Na, self.n0)
 

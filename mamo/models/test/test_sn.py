@@ -6,7 +6,8 @@ from mamo.models.sn import smax_stuessi_goodman_weibull, smax_stuessi_goodman,\
     p_weibull, s_weibull, sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
     sa_swt, sa_tosa, sa_boerstra, smax_stuessi_boerstra, N_smax_stuessi_boerstra,\
     explogx, N_stuessi, smax_stuessi_boerstra_weibull, poly1dlogx,\
-    smax_basquin_boerstra, smax_basquin_boerstra_weibull
+    smax_basquin_boerstra, smax_basquin_boerstra_weibull, _nNa, sa_stuessi,\
+    bisection, dsa_dn_basquin, dsa_dn_stuessi, m_touch
 
 import matplotlib as mpl
 from mamo.models.lib import readjson, writejson
@@ -1536,6 +1537,77 @@ def test_basquin_boerstra(folder):
     plt.close(fig)
 
 
+def test_touch(folder):
+    exp_start = 0  # 10^0
+    exp_end = 7  # 10^7
+    npoint = 100
+    ns = np.logspace(exp_start, exp_end, npoint)
+
+    #nR = 10
+    R = [-1.4, -1., 0.1]  # np.linspace(-1.,-1.1, 0.1, nR)
+    nR = len(R)
+
+    m = 4.6
+    Rt = 60.E+6
+    Re = 15.E+6
+    Na = 1650
+    n0 = 1.
+    #alp = 0.95
+    M = 1.
+
+    a_ = 0.63
+    b_ = 0.18
+    c_ = 0.37
+
+    alp_c = [a_, b_, c_]
+
+    R = -1
+
+    s_sb = smax_stuessi_boerstra(
+        ns, R, m, Rt, Re, Na, alp_c)
+
+    def fun(n_):
+        mt = m_touch(n_, m, Rt, Re, Na, n0)
+        lhs = dsa_dn_basquin(n_, mt, Rt)
+        rhs = dsa_dn_stuessi(n_, m, Rt, Re, Na, n0)
+        return lhs - rhs
+
+    '''
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.semilogx(ns, fun(ns))
+    plt.ylim(-1., None)
+    plt.xlim(15E6, 15.1E6)
+    '''
+
+    N_start = Na
+    N_end = 1E+8
+    Nt = bisection(fun, lower=N_start, upper=N_end,
+                   tol=1e-6, maxiter=100, callback=None)
+
+    mt = m_touch(Nt, m, Rt, Re, Na, n0)
+
+    s_bb = smax_basquin_boerstra(ns, R, mt, Rt, alp_c)
+
+    #######################################################################
+    figname = 'sn_touch_test'
+    #######################################################################
+    fig, ax = plt.subplots()
+
+    #col = next(ax._get_lines.prop_cycler)['color']
+    ax.semilogx(ns, s_sb * 1E-6, '-')
+    ax.semilogx(ns, s_bb * 1E-6, '-')
+
+    #ax.loglog(ns, smax * 1E-6)
+
+    ax.set_ylabel(smax_label)
+    ax.set_xlabel(n_label)
+    ax.set_ylim(10, 70)
+    # ax.legend()
+    savefig(fig, folder=folder, figname=figname)
+    plt.close(fig)
+
+
 if __name__ == '__main__':
 
     smax_label = r'Max. stress $\sigma_\text{max}$ in \si{\mega \pascal}'
@@ -1547,6 +1619,7 @@ if __name__ == '__main__':
     # test_cld_fit(folder='')
     # test_stuessi_boerstra(folder='')
     # test_basquin_boerstra(folder='')
+    test_touch(folder='')
 
     rev = '04'
 

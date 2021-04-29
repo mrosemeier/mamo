@@ -1,1097 +1,61 @@
 import os
-import numpy as np
-from mamo.models.sn import smax_stuessi_goodman_weibull, smax_stuessi_goodman,\
-    x_weibull, _b, smax_basquin_goodman, smax_basquin_goodman_weibull, SNFit,\
-    N_smax_stuessi_goodman_weibull, sa_smax, sm, sa_stuessi_weibull, CLDFit,\
-    p_weibull, s_weibull, sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
-    sa_swt, sa_tosa, sa_boerstra, smax_stuessi_boerstra, N_smax_stuessi_boerstra,\
-    explogx, N_stuessi, smax_stuessi_boerstra_weibull, poly1dlogx,\
-    smax_basquin_boerstra, smax_basquin_boerstra_weibull, _nNa, sa_stuessi,\
-    bisection, dsa_dn_basquin, dsa_dn_stuessi, m_touch
-
-import matplotlib as mpl
-from mamo.models.lib import readjson, writejson
+import unittest
+import tempfile
 import shutil
 from collections import OrderedDict
-import cPickle
-mpl.rcParams['text.usetex'] = True
-mpl.rcParams['text.latex.unicode'] = True
-mpl.rcParams['text.latex.preamble'] = [
-    r"\usepackage[utf8x]{inputenc}",
-    r"\usepackage[T1]{fontenc}",
-    r"\usepackage{cmbright}",
-    r"\usepackage{siunitx}",
-    r"\usepackage{amsmath}",
-]
-
-width = 8.3E-2  # IOP 8.255E-2  # AIAA journal
-mtoinch = 39.3700787402
-hw = 6 / 8.
-figsize = (width * mtoinch, hw * width * mtoinch)
-fontsizeleg = 6  # 7  # 5  # 6
-labelsize = 'x-small'  # 8
-markersize = 3
-pad = 0.03  # 0.035
-handlelengthleg = 3
-linewidth = 0.5
-numpoints = 1
-dpipng = 400
-mpl.rcParams['lines.linewidth'] = linewidth
-mpl.rcParams['axes.linewidth'] = linewidth
-mpl.rcParams['patch.linewidth'] = linewidth
-mpl.rcParams['lines.markersize'] = markersize
-mpl.rcParams['figure.figsize'] = figsize
-mpl.rcParams['xtick.labelsize'] = labelsize
-mpl.rcParams['ytick.labelsize'] = labelsize
-mpl.rcParams['axes.labelsize'] = labelsize
-mpl.rcParams['legend.loc'] = 'best'
-mpl.rcParams['legend.numpoints'] = numpoints
-mpl.rcParams['legend.fontsize'] = fontsizeleg
-mpl.rcParams['legend.handlelength'] = handlelengthleg
-mpl.rcParams['savefig.dpi'] = dpipng
-mpl.rcParams['savefig.bbox'] = 'tight'
-mpl.rcParams['savefig.pad_inches'] = pad
-colors_10 = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-             '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-
-colors_20 = ['#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', '#d62728',
-             '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94', '#e377c2',
-             '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf',
-             '#9edae5']
-mpl.rcParams['axes.prop_cycle'] = mpl.cycler(color=colors_10)
 import matplotlib.pylab as plt
+import pickle
+import numpy as np
+import pandas as pd
+from mamo.models.sn import smax_basquin_goodman_weibull, SNFit,\
+    sa_smax, sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
+    sa_swt, sa_tosa, sa_boerstra, smax_stuessi_boerstra_weibull, \
+    smax_basquin_boerstra, smax_basquin_boerstra_weibull, sm_smax, R_ratio,\
+    smax_sa, N_basquin_goodman_weibull, N_basquin_boerstra,\
+    m_basquin_2p, m_basquin, dn_dsa_basquin, dn_dsa_stuessi,\
+    N_basquin_boerstra_weibull, N_stuessi_boerstra_weibull
+from mamo.models.normstren import ttg, Rt_norm_fiedler
 
 
-def savefigdata(fig, filename):
-    ''' Writes all plotted lines xy data of all axes to a text file
+def normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0):
+    ''' Normalizes a corrected data set to a target design temperature 
+    and a target glass transition temperature
+    :param: td_tar: target design temperature in degree Celsius
+    :param: tgd_tar: target design glass transition temperature in degree Celsius
     '''
-    for ai, ax in enumerate(fig.get_axes()):
-        for li, line in enumerate(ax.get_lines()):
-            header = 'ax_%02d_line_%02d' % (ai, li)
-            if ai == 0 and li == 0:
-                with open(filename, 'w') as write_file:
-                    write_file.write('# ' + header + '\n')
-            else:
-                with open(filename, 'a') as write_file:
-                    write_file.write('# ' + header + '\n')
-            with open(filename, 'a') as write_file:
-                xyd = line.get_xydata()
-                np.savetxt(write_file, xyd)
-
-
-def savefig(fig, folder, figname):
-    fig.savefig(os.path.join(folder, figname + '.png'))
-    fig.savefig(os.path.join(folder, figname + '.pdf'))
-    fig.savefig(os.path.join(folder, figname + '.eps'))
-    savefigdata(fig, os.path.join(folder, figname + '.dat'))
-
-
-def color_map(number_of_lines, style=''):
-    if style == 'fhg':
-        colors = [(0.55294, 0.82745, 0.78039),
-                  (0.95, 0.35, 0.70196),
-                  (0.74509, 0.729411, 0.854901),
-                  (0.98431, 0.50196, 0.44705),
-                  (0.50196, 0.69411, 0.82745),
-                  (0.99215, 0.70588, 0.38431),
-                  (0.70196, 0.87058, 0.41176),
-                  (0.98823, 0.80392, 0.89803),
-                  (0.85098, 0.85098, 0.85098),
-                  (0.73725, 0.50196, 0.74117),
-                  (0.8, 0.92156, 0.772549),
-                  (1, 0.92941, 0.43529),
-                  (0.55294, 0.82745, 0.78039),
-                  (0.95, 0.35, 0.70196),
-                  (0.74509, 0.729411, 0.854901),
-                  (0.98431, 0.50196, 0.44705),
-                  (0.50196, 0.69411, 0.82745),
-                  (0.99215, 0.70588, 0.38431),
-                  (0.70196, 0.87058, 0.41176),
-                  (0.98823, 0.80392, 0.89803),
-                  (0.85098, 0.85098, 0.85098),
-                  (0.73725, 0.50196, 0.74117),
-                  (0.8, 0.92156, 0.772549),
-                  (1, 0.92941, 0.43529),
-                  (0.55294, 0.82745, 0.78039),
-                  (0.95, 0.35, 0.70196),
-                  (0.74509, 0.729411, 0.854901),
-                  (0.98431, 0.50196, 0.44705),
-                  (0.50196, 0.69411, 0.82745),
-                  (0.99215, 0.70588, 0.38431),
-                  (0.70196, 0.87058, 0.41176),
-                  (0.98823, 0.80392, 0.89803),
-                  (0.85098, 0.85098, 0.85098),
-                  (0.73725, 0.50196, 0.74117),
-                  (0.8, 0.92156, 0.772549),
-                  (1, 0.92941, 0.43529),
-                  ]
-    else:
-        cm = plt.get_cmap('jet')
-        start = 0.2
-        stop = 1.0
-        colors = [cm(x) for x in np.linspace(start, stop, number_of_lines)]
-    return colors
-
-
-def _color_y_axis(ax, color):
-    """Color your axes."""
-    for t in ax.get_yticklabels():
-        t.set_color(color)
-    return None
-
-
-def _lab(pi, lab):
-    if pi == 0:
-        label = lab
-    else:
-        label = ''
-    return label
-
-
-def post_stuessi_goodman(fname, snf, ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True, cldf=[]):
-
-    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_sg.json'))
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    ns = np.logspace(exp_start, exp_end, 1E3)
-
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
-
-    M_fit = 1
-    lstyle = '-'
-
-    grps = snf.cyc_data['grplist']
-    cyc_stress_max = snf.cyc_data['cyc_stress_max']
-    cyc_cycles = snf.cyc_data['cyc_cycles']
-    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m_fit']
-    m_50 = snf.sn_fit['m_50']
-    Rt_fit = snf.sn_fit['Rt_fit']
-    Re_fit = snf.sn_fit['Re_fit']
-    Na_fit = snf.sn_fit['Na']
-    alp_smax_fit = snf.sn_fit['alpha']
-    bet_smax_fit = snf.sn_fit['beta']
-    gam_smax_fit = snf.sn_fit['gamma']
-    Rt_50 = snf.sn_fit['Rt_50']
-    Re_50 = snf.sn_fit['Re_50']
-    Re_50_R = snf.sn_fit['Re_50_R']
-    n0 = snf.n0
-
-    #gidxs = [0, 1, 2, 3]
-    gidxs = range(len(grps))
-
-    if cldf:
-        sfx = '_stuessi'
-    else:
-        sfx = '_weibull'
-
-    #######################################################################
-    figname = fname + '_' + 'sn_stuessi_goodman' + sfx
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for gidx, grp, col in zip(gidxs, grps, cols):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-
-            show_fit_wo_weibull = False
-            if show_fit_wo_weibull:
-                smax_sg = smax_stuessi_goodman_weibull(ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit,
-                                                       Re=Re_fit, Na=Na_fit)
-                ax.semilogx(ns, smax_sg * 1E-6, linestyle=':', color=col,
-                            label=r'Fit')
-
-            if show_p5_p95:
-                p = 0.05
-                smax_05 = smax_stuessi_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                    Re_fit=Re_fit, Na=Na_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            p = 0.50
-            smax_50 = smax_stuessi_goodman_weibull(
-                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                Re_fit=Re_fit, Na=Na_fit,
-                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-            ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-            # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
-            # cyc_ratio_grp[gidx]))
-
-            show_test_curve = False
-            if show_test_curve:
-                # p50% without weibull
-                xw_50 = x_weibull(p=p, alpha=alp_smax_fit,
-                                  beta=bet_smax_fit, gamma=gam_smax_fit)
-                smax_50_wo = xw_50 + smax_stuessi_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit,
-                                                          Rt=Rt_fit, M=M_fit, Re=Re_fit, Na=Na_fit, n0=n0)
-                ax.semilogx(ns, smax_50_wo * 1E-6, linestyle='--', color='orange',
-                            label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100, cyc_ratio_grp[gidx]))
-
-            if show_p5_p95:
-                p = 0.95
-                smax_95 = smax_stuessi_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                    Re_fit=Re_fit, Na=Na_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            if cldf:
-                if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-                    gidx_s = gidx - 1
-                    grps_s = cldf.sn_grp[gidx_s]['cyc_data']['grplist']
-                    cyc_stress_max_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_stress_max']
-                    cyc_cycles_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_cycles']
-                    cyc_ratio_grp_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_ratio_grp']
-                    m_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['m_fit']
-                    Rt_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_fit']
-                    Re_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_fit']
-                    Na_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Na']
-                    alp_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['alpha']
-                    bet_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['beta']
-                    gam_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['gamma']
-                    Rt_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_50']
-                    Re_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50']
-                    Re_50_R_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50_R']
-                    n0_s = cldf.n0
-
-                    p = 0.50
-                    sa_50 = sa_stuessi_weibull(
-                        ns, R=cyc_ratio_grp_s[1], m=m_fit_s, Rt_fit=Rt_fit_s, M=M_fit,
-                        Re_fit=Re_fit_s, Na=Na_fit_s,
-                        p=p, alpha=alp_smax_fit_s, beta=bet_smax_fit_s, gamma=gam_smax_fit_s, n0=n0_s)
-                    ax.semilogx(ns, sa_50 * 1E-6, linestyle='--', color=col,
-                                label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-    # for gidx, grp, col in zip(gidxs, grps, cols):
-        for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-            ax.semilogx(n, s * 1E-6, 'd',
-                        color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
-
-    # place summary box
-    textstr = '\n'.join((
-        r'$m_\text{fit}=%.2f$' % (m_fit),
-        r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Rt_fit * 1E-6),
-        r'$R^\text{e}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Re_fit * 1E-6),
-        r'$N_\text{a}=%i$' % (Na_fit),
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-        r'$m^{R=-1}_{p=\SI{50}{\percent}}=%.2f$' % (m_50),
-        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50 * 1E-6),
-        r'$R^{\text{e},R=-1}_{p=\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Re_50 * 1E-6)
-    ))  # ,r'$R^{\text{e},R=0.1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-    #     Re_50_R[gidx] * 1E-6)
-
-    # these are matplotlib.patch.Patch properties
-    props = dict(facecolor='white', edgecolor='black')
-
-    if textbox:
-        # place a text box in upper left in axes coords
-        ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=4,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=props)
-
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(ylim[0], ylim[1])
-    ax.set_xlim(None, None)
-    if legend:
-        ax.legend(ncol=1, loc='lower left')
-    ystep = 10
-    yticks = np.arange(ylim[0], ylim[1] + ystep, ystep)
-    ax.set_yticks(ticks=yticks, minor=False)
-    import matplotlib.ticker as ticker
-    ax.yaxis.set_major_formatter(
-        ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_stuessi_boerstra(fname, snf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True, show_p5_p95=True, cldf=[]):
-
-    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_sb.json'))
-
-    exp_start = xlim[0]  # 10^0
-    exp_end = xlim[1]  # 10^7
-    ns = np.logspace(exp_start, exp_end, 1E3)
-
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
-
-    M_fit = 1
-    lstyle = '-'
-
-    grps = snf.cyc_data['grplist']
-    cyc_stress_max = snf.cyc_data['cyc_stress_max']
-    cyc_cycles = snf.cyc_data['cyc_cycles']
-    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m_fit']
-    m_50 = snf.sn_fit['m_50']
-    Rt_fit = snf.sn_fit['Rt_fit']
-    Re_fit = snf.sn_fit['Re_fit']
-    Na_fit = snf.sn_fit['Na']
-    alp_c = snf.alp_c
-    alp_fit = snf.alp_fit
-    alp_smax_fit = snf.sn_fit['alpha']
-    bet_smax_fit = snf.sn_fit['beta']
-    gam_smax_fit = snf.sn_fit['gamma']
-    Rt_50 = snf.sn_fit['Rt_50']
-    Re_50 = snf.sn_fit['Re_50']
-    Re_50_R = snf.sn_fit['Re_50_R']
-
-    n0 = snf.n0
-
-    #gidxs = [0, 1, 2, 3]
-    gidxs = range(len(grps))
-
-    if cldf:
-        sfx = '_stuessi'
-    else:
-        sfx = '_weibull'
-
-    #######################################################################
-    figname = fname + '_' + 'sn_stuessi_boerstra' + sfx
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for gidx, grp, col in zip(gidxs, grps, cols):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-
-            show_fit_wo_weibull = False
-            if show_fit_wo_weibull:
-                smax_sg = smax_stuessi_goodman_weibull(ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit,
-                                                       Re=Re_fit, Na=Na_fit)
-                ax.semilogx(ns, smax_sg * 1E-6, linestyle=':', color=col,
-                            label=r'Fit')
-
-            if show_p5_p95:
-                p = 0.05
-                smax_05 = smax_stuessi_boerstra_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            p = 0.50
-            smax_50 = smax_stuessi_boerstra_weibull(
-                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
-                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-            ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-            # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
-            # cyc_ratio_grp[gidx]))
-
-            if show_p5_p95:
-                p = 0.95
-                smax_95 = smax_stuessi_boerstra_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                    Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit, n0=n0)
-                ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            if cldf:
-                if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-                    gidx_s = gidx - 1
-                    grps_s = cldf.sn_grp[gidx_s]['cyc_data']['grplist']
-                    cyc_stress_max_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_stress_max']
-                    cyc_cycles_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_cycles']
-                    cyc_ratio_grp_s = cldf.sn_grp[gidx_s]['cyc_data']['cyc_ratio_grp']
-                    m_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['m_fit']
-                    Rt_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_fit']
-                    Re_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_fit']
-                    Na_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['Na']
-                    alp_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['alpha']
-                    bet_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['beta']
-                    gam_smax_fit_s = cldf.sn_grp[gidx_s]['sn_fit']['gamma']
-                    Rt_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Rt_50']
-                    Re_50_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50']
-                    Re_50_R_s = cldf.sn_grp[gidx_s]['sn_fit']['Re_50_R']
-                    n0_s = cldf.n0
-
-                    p = 0.50
-                    sa_50 = sa_stuessi_weibull(
-                        ns, R=cyc_ratio_grp_s[1], m=m_fit_s, Rt_fit=Rt_fit_s, M=M_fit,
-                        Re_fit=Re_fit_s, Na=Na_fit_s,
-                        p=p, alpha=alp_smax_fit_s, beta=bet_smax_fit_s, gamma=gam_smax_fit_s, n0=n0_s)
-                    ax.semilogx(ns, sa_50 * 1E-6, linestyle='--', color=col,
-                                label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-    # for gidx, grp, col in zip(gidxs, grps, cols):
-        for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-            ax.semilogx(n, s * 1E-6, 'd',
-                        color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
-
-    # place summary box
-    textstr = '\n'.join((
-        r'$m_\text{fit}=%.2f$' % (m_fit),
-        r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Rt_fit * 1E-6),
-        r'$R^\text{e}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (Re_fit * 1E-6),
-        r'$N_\text{a}=%i$' % (Na_fit),
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-        r'$m^{R=-1}_{p=\SI{50}{\percent}}=%.2f$' % (m_50),
-        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50 * 1E-6),
-        r'$R^{\text{e},R=-1}_{p=\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Re_50 * 1E-6)
-    ))  # ,r'$R^{\text{e},R=0.1}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-    #     Re_50_R[gidx] * 1E-6)
-
-    # these are matplotlib.patch.Patch properties
-    props = dict(facecolor='white', edgecolor='black')
-
-    if textbox:
-        # place a text box in upper left in axes coords
-        ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=4,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=props)
-
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(ylim[0], ylim[1])
-    ax.set_xlim(None, None)
-    if legend:
-        ax.legend(ncol=1, loc='lower left')
-    ystep = 10
-    yticks = np.arange(ylim[0], ylim[1] + ystep, ystep)
-    ax.set_yticks(ticks=yticks, minor=False)
-    import matplotlib.ticker as ticker
-    ax.yaxis.set_major_formatter(
-        ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_basquin_goodmann(fname, snf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True):
-
-    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_bg.json'))
-
-    exp_start = xlim[0]  # 10^0
-    exp_end = xlim[1]  # 10^7
-    ns = np.logspace(exp_start, exp_end, 1E3)
-
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
-
-    M_fit = 1
-    lstyle = '-'
-
-    grps = snf.cyc_data['grplist']
-    cyc_stress_max = snf.cyc_data['cyc_stress_max']
-    cyc_cycles = snf.cyc_data['cyc_cycles']
-    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m_fit']
-    Rt_fit = snf.sn_fit['Rt_fit']
-    alp_smax_fit = snf.sn_fit['alpha']
-    bet_smax_fit = snf.sn_fit['beta']
-    gam_smax_fit = snf.sn_fit['gamma']
-    Rt_50 = snf.sn_fit['Rt_50']
-
-    #gidxs = [0, 1, 2, 3]
-    gidxs = range(len(grps))
-
-    #######################################################################
-    figname = fname + '_' + 'sn_basquin_goodman'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for gidx, grp, col in zip(gidxs, grps, cols):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-
-            show_fit_wo_weibull = False
-            if show_fit_wo_weibull:
-                smax_sg = smax_basquin_goodman(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, M=M_fit)
-                ax.semilogx(ns, smax_sg * 1E-6, linestyle=lstyle, color=col,
-                            label=r'Fit')
-
-            show_p5_p95 = True
-            if show_p5_p95:
-                p = 0.05
-                smax_05 = smax_basquin_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            p = 0.50
-            smax_50 = smax_basquin_goodman_weibull(
-                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-            ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-            # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
-            # cyc_ratio_grp[gidx]))
-
-            show_test_curve = False
-            if show_test_curve:
-                # p50% without weibull
-                xw_50 = x_weibull(p=p, alpha=alp_smax_fit,
-                                  beta=bet_smax_fit, gamma=gam_smax_fit)
-                smax_50_wo = xw_50 + smax_basquin_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit,
-                                                          Rt=Rt_fit, M=M_fit,)
-                ax.semilogx(ns, smax_50_wo * 1E-6, linestyle='--', color='orange',
-                            label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100, cyc_ratio_grp[gidx]))
-
-                smax_50 = smax_basquin_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit,
-                                               Rt=Rt_50, M=M_fit,)
-
-                ax.semilogx(ns, smax_50 * 1E-6, linestyle='--', color='orange',
-                            label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100, cyc_ratio_grp[gidx]))
-
-            if show_p5_p95:
-                p = 0.95
-                smax_95 = smax_basquin_goodman_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, M=M_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-    # for gidx, grp, col in zip(gidxs, grps, cols):
-        for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-            ax.semilogx(n, s * 1E-6, 'd',
-                        color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
-
-    # place summary box
-    textstr = '\n'.join((
-        r'$m=%.2f$' % (m_fit),
-        r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_fit * 1E-6),
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50 * 1E-6)
-
-    ))
-
-    # these are matplotlib.patch.Patch properties
-    props = dict(facecolor='white', edgecolor='black')
-
-    if textbox:
-        # place a text box in upper left in axes coords
-        ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=4,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=props)
-
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(ylim[0], ylim[1])
-    ax.set_xlim(None, None)
-    if legend:
-        ax.legend(ncol=1, loc='lower left')
-    ystep = 10
-    yticks = np.arange(ylim[0], ylim[1] + ystep, ystep)
-    ax.set_yticks(ticks=yticks, minor=False)
-    import matplotlib.ticker as ticker
-    ax.yaxis.set_major_formatter(
-        ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_basquin_boerstra(fname, snf, xlim=[0, 7], ylim=[10, 80], legend=True, textbox=True):
-
-    writejson(snf.sn_fit, os.path.join(folder, fname + '_' + 'sn_fit_bb.json'))
-
-    exp_start = xlim[0]  # 10^0
-    exp_end = xlim[1]  # 10^7
-    ns = np.logspace(exp_start, exp_end, 1E3)
-
-    cols = ['k', 'b', 'g', 'r', 'orange', 'm_fit']
-
-    M_fit = 1
-    lstyle = '-'
-
-    grps = snf.cyc_data['grplist']
-    cyc_stress_max = snf.cyc_data['cyc_stress_max']
-    cyc_cycles = snf.cyc_data['cyc_cycles']
-    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    m_fit = snf.sn_fit['m_fit']
-    Rt_fit = snf.sn_fit['Rt_fit']
-    alp_smax_fit = snf.sn_fit['alpha']
-    bet_smax_fit = snf.sn_fit['beta']
-    gam_smax_fit = snf.sn_fit['gamma']
-    Rt_50 = snf.sn_fit['Rt_50']
-
-    #gidxs = [0, 1, 2, 3]
-    gidxs = range(len(grps))
-
-    #######################################################################
-    figname = fname + '_' + 'sn_basquin_boerstra'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for gidx, grp, col in zip(gidxs, grps, cols):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
-
-            show_fit_wo_weibull = False
-            if show_fit_wo_weibull:
-                smax_sg = smax_basquin_boerstra(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt=Rt_fit, alp_c=snf.alp_c, alp_fit=snf.alp_fit)
-                ax.semilogx(ns, smax_sg * 1E-6, linestyle=lstyle, color=col,
-                            label=r'Fit')
-
-            show_p5_p95 = True
-            if show_p5_p95:
-                p = 0.05
-                smax_05 = smax_basquin_boerstra_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, alp_c=snf.alp_c, alp_fit=snf.alp_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.semilogx(ns, smax_05 * 1E-6, linestyle='-.', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-            p = 0.50
-            smax_50 = smax_basquin_boerstra_weibull(
-                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, alp_c=snf.alp_c, alp_fit=snf.alp_fit,
-                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-            ax.semilogx(ns, smax_50 * 1E-6, linestyle='-', color=col,
-                        label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-            # label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100,
-            # cyc_ratio_grp[gidx]))
-
-            show_test_curve = False
-            if show_test_curve:
-                # p50% without weibull
-                xw_50 = x_weibull(p=p, alpha=alp_smax_fit,
-                                  beta=bet_smax_fit, gamma=gam_smax_fit)
-                smax_50_wo = xw_50 + smax_basquin_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit,
-                                                          Rt=Rt_fit, M=M_fit,)
-                ax.semilogx(ns, smax_50_wo * 1E-6, linestyle='--', color='orange',
-                            label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100, cyc_ratio_grp[gidx]))
-
-                smax_50 = smax_basquin_goodman(ns, R=cyc_ratio_grp[gidx], m=m_fit,
-                                               Rt=Rt_50, M=M_fit,)
-
-                ax.semilogx(ns, smax_50 * 1E-6, linestyle='--', color='orange',
-                            label=r'$P_{\SI{%i}{\percent}}$, $R=%0.2f$' % (p * 100, cyc_ratio_grp[gidx]))
-
-            if show_p5_p95:
-                p = 0.95
-                smax_95 = smax_basquin_boerstra_weibull(
-                    ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit, alp_c=snf.alp_c, alp_fit=snf.alp_fit,
-                    p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
-                ax.semilogx(ns, smax_95 * 1E-6, linestyle='--', color=col,
-                            label=r'$P_{\SI{%i}{\percent}}$' % (p * 100))
-
-    # for gidx, grp, col in zip(gidxs, grps, cols):
-        for i, (s, n) in enumerate(zip(cyc_stress_max[grp], cyc_cycles[grp])):
-            ax.semilogx(n, s * 1E-6, 'd',
-                        color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
-
-    # place summary box
-    textstr = '\n'.join((
-        r'$m=%.2f$' % (m_fit),
-        r'$R^\text{t}_\text{fit}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_fit * 1E-6),
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50 * 1E-6)
-
-    ))
-
-    # these are matplotlib.patch.Patch properties
-    props = dict(facecolor='white', edgecolor='black')
-
-    if textbox:
-        # place a text box in upper left in axes coords
-        ax.text(0.97, 0.96, textstr, transform=ax.transAxes, fontsize=4,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=props)
-
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(ylim[0], ylim[1])
-    ax.set_xlim(None, None)
-    if legend:
-        ax.legend(ncol=1, loc='lower left')
-    ystep = 10
-    yticks = np.arange(ylim[0], ylim[1] + ystep, ystep)
-    ax.set_yticks(ticks=yticks, minor=False)
-    import matplotlib.ticker as ticker
-    ax.yaxis.set_major_formatter(
-        ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_weibull(fname, snf, legend=True, textbox=True):
-
-    p_label = r'Probability $P$'
-    Rt_label = r'Static strength $R^\text{t}$ in \si{\mega\pascal}'
-
-    Rt_fit = snf.sn_fit['Rt_fit']
-    alpha = snf.sn_fit['alpha']
-    beta = snf.sn_fit['beta']
-    gamma = snf.sn_fit['gamma']
-    xs = snf.sn_fit['xs']
-
-    x_min_ = x_weibull(0.001, alpha, beta, gamma)
-    x_max_ = x_weibull(0.999, alpha, beta, gamma)
-    xs_min_ = np.min(xs)
-    xs_max_ = np.max(xs)
-
-    xs_min = np.min([x_min_, xs_min_])
-    xs_max = np.max([x_max_, xs_max_])
-
-    mu, Rt_sig = s_weibull(alpha, beta, gamma)
-
-    Rt_mean = mu + Rt_fit
-
-    x = np.linspace(xs_min, xs_max, 1E3)
-    p_fit = p_weibull(x, alpha, beta, gamma)
-
-    #plt.plot((x + Rt_fit) * 1E-6, ps_fit)
-    #plt.plot((xs + Rt_fit) * 1E-6, p_weibull(xs, alpha, beta, gamma), 'd')
-
-    grps = snf.cyc_data['grplist']
-    cyc_stress_max = snf.cyc_data['cyc_stress_max']
-    cyc_cycles = snf.cyc_data['cyc_cycles']
-    cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
-    Rt_fit = snf.sn_fit['Rt_fit']
-    alp_smax_fit = snf.sn_fit['alpha']
-    bet_smax_fit = snf.sn_fit['beta']
-    gam_smax_fit = snf.sn_fit['gamma']
-    Rt_50 = snf.sn_fit['Rt_50']
-
-    #gidxs = [0, 1, 2, 3]
-    gidxs = range(len(grps))
-
-    #######################################################################
-    figname = fname + '_' + 'p_' + snf.fit_type
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    ax.plot((x + Rt_fit) * 1E-6, p_fit, 'k',
-            label=r'$P\left(\alpha, \beta, \gamma\right)$')
-
-    count = 0
-    for gidx, grp in zip(gidxs, grps):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        for i, _ in enumerate(cyc_stress_max[grp]):
-            xi = xs[count]
-            pi = p_weibull(xi, alpha, beta, gamma)
-            ax.plot((xi + Rt_fit) * 1E-6, pi, 'd',
-                    color=col,  label=_lab(i, r'$R=%0.2f$' % (cyc_ratio_grp[gidx])))  # label=_lab(i, r'Exp.'))
-            count += 1
-    # place summary box
-    textstr = '\n'.join((
-        r'$\alpha=\num{%.2E}$' % (alp_smax_fit),
-        r'$\beta=\num{%.2E}$' % (bet_smax_fit),
-        r'$\gamma=\num{%.2E}$' % (gam_smax_fit),
-        r'$R^\text{t}_{\SI{50}{\percent}}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_50 * 1E-6),
-        r'$R^\text{t}_\text{mean}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_mean * 1E-6),
-        r'$R^\text{t}_{\sigma}=\SI{%.2f}{\mega\pascal}$' % (
-            Rt_sig * 1E-6)
-    ))
-
-    # these are matplotlib.patch.Patch properties
-    props = dict(facecolor='white', edgecolor='black')
-
-    if textbox:
-        # place a text box in upper left in axes coords
-        ax.text(0.03, 0.96, textstr, transform=ax.transAxes, fontsize=4,
-                verticalalignment='top', horizontalalignment='left',
-                bbox=props)
-
-    ax.set_ylabel(p_label)
-    ax.set_xlabel(Rt_label)
-    #ax.set_ylim(ylim[0], ylim[1])
-    #ax.set_xlim(None, None)
-    if legend:
-        ax.legend(ncol=1, loc='lower right')
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_cld(fname, snf, cfg, legend=True, textbox=True):
-    #######################################################################
-    figname = fname + '_' + 'cld_fit_' + snf.fit_type
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    nfilt = cfg['nfilt']
-
-    for _, (i, n) in enumerate(zip(nfilt, snf.ns[nfilt])):
-        col = next(ax._get_lines.prop_cycler)['color']
-        ax.plot(snf.sm_proj[:, i] * 1E-6,
-                snf.sa_proj[:, i] * 1E-6, 'd', color=col)
-
-        ax.plot(snf.sms_b * 1E-6,
-                snf.sas_b[:, i] * 1E-6,
-                '-', color=col, label=r'$N=\num{%0.0E}$' % (n))
-
-    ax.set_ylabel(sa_label)
-    ax.set_xlabel(sm_label)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def post_alp(fname, snf, cfg, legend=True, textbox=True):
-    #######################################################################
-    figname = fname + '_' + 'cld_alp_fit_' + snf.fit_type
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    nfilt = cfg['nfilt']
-
-    for _, (i, n) in enumerate(zip(nfilt, snf.ns[nfilt])):
-        col = next(ax._get_lines.prop_cycler)['color']
-
-        ax.semilogx(n, snf.alp[i],
-                    'o', color=col, label=r'Boerstra fit')
-    exp_start = 0  # 10^0
-    exp_end = 8  # 10^7
-    nsf = np.logspace(exp_start, exp_end, 1000)
-    if snf.alp_fit == 'exp':
-        alpf = explogx(nsf, *snf.alp_c)
-    elif snf.alp_fit == 'lin':
-        alpf = poly1dlogx(nsf, *snf.alp_c)
-    elif snf.alp_fit == 'aki':
-        alpf = snf.alp_c(np.log10(nsf))
-    ax.semilogx(nsf, alpf, '--', color='k', label=r'Akima fit')
-    # ,label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (cldf.alp_c[0], cldf.alp_c[1], cldf.alp_c[2]))
-
-    ax.set_ylabel(alp_label)
-    ax.set_xlabel(n_label)
-    #ax.set_ylim(None, 1)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def process_fit(fname, data, grp_entries, grp_entries_list, cfg):
-
-    exp_start = cfg['xlim'][0]
-    exp_end = cfg['xlim'][1]
-    npoint = cfg['npoint']
-    ns = np.logspace(exp_start, exp_end, npoint)
-
-    #######################################################################
-    snf = SNFit(fit_type='basquin-boerstra')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = cfg['m_start']
-    snf.Rt_start = cfg['Rt_start']
-    snf.alp_c = cfg['alp_c']
-    snf.alp_fit = cfg['alp_fit']
-    snf.Na_start = cfg['Na_start']
-    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
-
-    #######################################################################
-    # Post Basquin-Boerstra
-    #######################################################################
-    ylim = cfg['ylim']
-    xlim = cfg['xlim']
-    legend = False
-    textbox = True
-    show_p5_p95 = False
-
-    post_basquin_boerstra(fname, snf, xlim, ylim, legend, textbox)
-    post_weibull(fname, snf, legend=True, textbox=True)
-    post_cld(fname, snf, cfg, legend=True, textbox=True)
-    post_alp(fname, snf, cfg, legend=True, textbox=True)
-
-    #######################################################################
-    snf = SNFit(fit_type='basquin-goodman')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = cfg['m_start']
-    snf.Rt_start = cfg['Rt_start']
-    snf.fit_sn(cfg['include_weibull'])
-    snf.project_data(ns)
-    snf.fit_cld()
-
-    #######################################################################
-    # Post Basquin-Goodman
-    #######################################################################
-
-    post_basquin_goodmann(fname, snf, xlim, ylim, legend, textbox)
-    post_weibull(fname, snf, legend=True, textbox=True)
-    post_cld(fname, snf, cfg, legend=True, textbox=True)
-
-    #######################################################################
-    snf = SNFit(fit_type='stuessi-boerstra')
-    #######################################################################
-    snf.load_data(data, grp_entries)
-    snf.m_start = cfg['m_start']
-    snf.Rt_start = cfg['Rt_start']
-    snf.Re_start = cfg['Re_start']
-    snf.alp_c = cfg['alp_c']
-    snf.alp_fit = cfg['alp_fit']  # cldf.alp_fit
-    snf.Na_start = cfg['Na_start']
-    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
-    #######################################################################
-    # Post Stuessi-Boerstra
-    #######################################################################
-
-    post_stuessi_boerstra(fname, snf, xlim, ylim, legend,
-                          textbox, show_p5_p95=True)
-    post_weibull(fname, snf, legend=True, textbox=True)
-    post_cld(fname, snf, cfg, legend=True, textbox=True)
-    post_alp(fname, snf, cfg, legend=True, textbox=True)
-    ####################
-
-
-def fit_basquin_stuessi_spabond(npoint=8):
-
-    fname = 'Spabond340_rev06'
-    sfx = '.dat'
+    fname = 'tab01.dat'
     path_data = 'data'
-    path_file = os.path.join(path_data, fname + sfx)
-    data = np.loadtxt(path_file, delimiter=',')
-    data[:, 1] = data[:, 1] * 1E+6  # transform to SI
-    data[:, 2] = data[:, 2] * 1E+6  # transform to SI
 
-    if fname == 'Spabond340_rev00':
-        grp0_ids = [0, 1, 2]  # R=1
-        grp1_ids = [3, 4]  # R=0.6
-        grp2_ids = [5, 6]  # R=0.1
-        grp3_ids = [7, 8, 9]  # R=-1
+    # Source: Rosemeier and Antoniou 2021, Tab. 1
+    df = pd.read_csv(os.path.join(path_data, fname), escapechar='#')
+    m = -371.3E6  # Source: Rosemeier and Antoniou 2021, Eq. 1
+    dfe = df[df['runout'] == 0].reset_index()  # exclude runouts
+    # normalize strengths to ttg_tar
+    ttg_tar = ttg(Td_tar, Tgd_tar)
+    sig_max_tar = Rt_norm_fiedler(
+        dfe['ttg_cor'], ttg_tar, dfe['sig_max_cor'], m)
+    dft = dfe.assign(ttg_tar=ttg_tar,
+                     sig_max_tar=sig_max_tar)
 
-        grp_entries = [grp0_ids, grp1_ids, grp2_ids, grp3_ids]
-
-        grp_entries_list = [[grp0_ids, grp1_ids],
-                            [grp0_ids, grp2_ids],
-                            [grp0_ids, grp3_ids]]
-    elif fname == 'Spabond340_rev04':
-        grp0_ids = list(np.arange(0, 5))  # R=1
-        grp11_ids = list(np.arange(5, 6))  # R=0.8
-        grp12_ids = list(np.arange(6, 8))  # R=0.8
-        grp21_ids = list(np.arange(8, 12))  # R=0.7...0.64
-        grp22_ids = list(np.arange(12, 14))
-        grp2f_ids = list(np.arange(7, 14))
-        grp3_ids = list(np.arange(14, 16))  # R=0.1
-        grp4_ids = list(np.arange(16, 19))  # R=-1
-
-        grp_entries = [grp0_ids,
-                       grp11_ids,
-                       grp12_ids,
-                       grp21_ids,
-                       grp22_ids,
-                       grp3_ids,
-                       grp4_ids]  # ,grp1_ids,  grp3_ids
-
-        grp_entries_list = [  # [grp0_ids, grp1_ids],
-            [grp0_ids, grp2f_ids],
-            [grp0_ids, grp3_ids],
-            #[grp0_ids, grp4_ids]
-        ]
-    elif fname == 'Spabond340_rev05':
-        grp0_ids = list(np.arange(0, 5))  # R=1
-        grp11_ids = list(np.arange(10, 11))  # R=0.8
-        grp12_ids = list(np.arange(11, 13))  # R=0.8
-        grp21_ids = list(np.arange(13, 17))  # R=0.7...0.64
-        grp22_ids = list(np.arange(17, 19))
-        grp2f_ids = list(np.arange(12, 19))
-        grp3_ids = list(np.arange(19, 21))  # R=0.1
-        grp4_ids = list(np.arange(21, 24))  # R=-1
-
-        grp_entries = [grp0_ids,
-                       # grp11_ids,
-                       grp12_ids,
-                       grp21_ids,
-                       grp22_ids,
-                       grp3_ids,
-                       grp4_ids]  # ,grp1_ids,  grp3_ids
-
-        grp_entries_list = [  # [grp0_ids, grp1_ids],
-            [grp0_ids, grp2f_ids],
-            [grp0_ids, grp3_ids],
-            #[grp0_ids, grp4_ids]
-        ]
-
-    elif fname == 'Spabond340_rev06':
-        grp0_ids = list(np.arange(0, 22))  # R=1
-        grp11_ids = list(np.arange(22, 23))  # R=0.8
-        grp12_ids = list(np.arange(23, 25))  # R=0.8
-        grp21_ids = list(np.arange(25, 29))  # R=0.7...0.64
-        grp22_ids = list(np.arange(29, 31))
-        grp2f_ids = list(np.arange(24, 31))
-        grp3_ids = list(np.arange(31, 33))  # R=0.1
-        grp4_ids = list(np.arange(33, 36))  # R=-1
-
-        grp_entries = [grp0_ids,
-                       grp11_ids,
-                       grp12_ids,
-                       grp21_ids,
-                       grp22_ids,
-                       grp3_ids,
-                       grp4_ids]  # ,grp1_ids,  grp3_ids
-
-        grp_entries_list = [  # [grp0_ids, grp1_ids],
-            [grp0_ids, grp2f_ids],
-            [grp0_ids, grp3_ids],
-            #[grp0_ids, grp4_ids]
-        ]
-
-    cfg = OrderedDict()
-    cfg['m_start'] = 6.0
-    cfg['Rt_start'] = 40.E+6
-    cfg['Re_start'] = 10.E+6
-    cfg['Na_start'] = 1E3
-    cfg['ylim'] = [10, 60]
-    cfg['xlim'] = [0, 1]
-    cfg['npoint'] = 5 * 9
-    cfg['include_weibull'] = False
-    cfg['alp_fit'] = 'exp'  # 'aki'
-    cfg['alp_min'] = 0.475
-    cfg['alp_c'] = [1.0, 0, 0]
-    cfg['alp_idxs'] = []  # [0, 5, 6, 7, 8]  # [0, 1, 2]
-
-    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
+    return dft
 
 
-def fit_basquin_stuessi_rim(npoint):
+def setup_fit(df):
 
-    fname = 'RIMR035c_rev03'
-    sfx = '.dat'
-    path_data = 'data'
-    path_file = os.path.join(path_data, fname + sfx)
-    data = np.loadtxt(path_file, delimiter=',')
-    data[:, 1] = data[:, 1] * 1E+6  # transform to SI
-    data[:, 2] = data[:, 2] * 1E+6  # transform to SI
+    # make data ready for sn fit
+    sig_a = sa_smax(df['sig_max_tar'], df['R'])
+    sig_m = sm_smax(df['sig_max_tar'], df['R'])
 
-    if fname == 'RIMR035c_rev01':
-        grp0_ids = list(np.arange(0, 7))  # R=1 # exclude 50.39 and 59 MPa
-        grp1_ids = list(np.arange(9, 19))  # R=0.1 incl runouts 20
-        grp2_ids = list(np.arange(20, 27))  # R=-1 incl runouts 28
+    dff = df.assign(sig_a=sig_a,
+                    sig_m=sig_m)
+    # ID, sig_a, sig_m, ratio , cycles to failure
+    data = dff[['num', 'sig_a', 'sig_m', 'R', 'N']].to_numpy()
 
-    elif fname == 'RIMR035c_rev02':
-        grp0_ids = list(np.arange(0, 3))
-        grp1_ids = list(np.arange(3, 13))
-        grp2_ids = list(np.arange(13, 21))
-
-    elif fname == 'RIMR035c_rev03':
-        grp0_ids = list(np.arange(0, 4))
-        grp1_ids = list(np.arange(5, 15))
-        grp2_ids = list(np.arange(15, 23))
-
+    # group data by stress ratio
+    grp0_ids = dff[dff['R'] == 1.0].index.to_list()
+    grp1_ids = dff[dff['R'] <= 0.11][dff['R'] >= 0.09].index.to_list()
+    grp2_ids = dff[dff['R'] <= -0.9][dff['R'] >= -1.1].index.to_list()
     grp_entries = [grp0_ids, grp1_ids, grp2_ids]
-    grp_entries_list = [[grp0_ids, grp1_ids],
-                        [grp0_ids, grp2_ids]]
 
     cfg = OrderedDict()
     cfg['m_start'] = 5.66
@@ -1102,534 +66,816 @@ def fit_basquin_stuessi_rim(npoint):
     cfg['xlim'] = [0, 8]
     cfg['npoint'] = 17
     cfg['include_weibull'] = False
-    cfg['alp_fit'] = 'exp'
-    cfg['alp_min'] = 0.40
     cfg['alp_c'] = [1.0, 0, 0]
-    cfg['alp_idxs'] = [0,  6, 7, 8, 9, 10, 11,
-                       12, 13, 14, 15, 16]  # [0, 1, 2]
+    cfg['alp_idxs'] = [0,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     cfg['nfilt'] = [0, 6, 8, 10, 12]
-    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
+    cfg['p_touch'] = 0.05
+    return data, grp_entries, cfg
 
 
-def fit_basquin_stuessi_epon(npoint):
+def process_fit(data, grp_entries, cfg):
 
-    fname = 'Epon826_rev00'
-    sfx = '.dat'
-    path_data = 'data'
-    path_file = os.path.join(path_data, fname + sfx)
-    data = np.loadtxt(path_file, delimiter=',')
-    data[:, 1] = data[:, 1] * 1E+6  # transform to SI
-    data[:, 2] = data[:, 2] * 1E+6  # transform to SI
+    rst = OrderedDict()
 
-    grp0_ids = list(np.arange(0, 5))  # R=1 factor 5 by copies
-    grp1_ids = list(np.arange(5, 9))  # R=0.23...0.27 # exclude runaway
-    grp11_ids = list(np.arange(5, 7))  # R=0.24
-    grp12_ids = list(np.arange(7, 9))  # R=0.27 # exclude runaway
-    grp01_ids = list(np.arange(10, 11))  # R=0.1
-    grp2_ids = list(np.arange(11, 17))  # R=-0.1 # exclude runaway
-    grp21_ids = list(np.arange(11, 13))  # R=-0.09...-0.1
-    grp22_ids = list(np.arange(13, 17))  # R=-0.11...-0.13 # exclude runaway
-    grp3_ids = list(np.arange(18, 22))  # R=-0.65 # exclude runout
-    grp31_ids = list(np.arange(18, 20))  # R=-0.61...0.64
-    grp32_ids = list(np.arange(20, 22))  # R=-0.61...0.64 # exclude runout
-    grp4_ids = list(np.arange(23, 34))  # R=-0.9# exclude runout
-
-    grp_entries = [
-        grp0_ids,
-        grp1_ids,  # grp11_ids, grp12_ids,
-        grp2_ids,  # grp21_ids, grp22_ids,
-        grp3_ids,  # grp31_ids, grp32_ids
-    ]
-
-    grp_entries_list = [[grp0_ids, grp1_ids],
-                        [grp0_ids, grp2_ids],
-                        [grp0_ids, grp3_ids]]
-
-    cfg = OrderedDict()
-    cfg['m_start'] = 8.5
-    cfg['Rt_start'] = 85.E+6
-    cfg['Re_start'] = 30.E+6
-    cfg['Na_start'] = 39.
-    cfg['ylim'] = [30, 90]
-    cfg['npoint'] = npoint
-    cfg['include_weibull'] = False
-    cfg['alp_fit'] = 'lin'
-    cfg['alp_idxs'] = [3, 4, 5, 6, 7]
-
-    process_fit(fname, data, grp_entries, grp_entries_list, cfg)
-
-
-def test_cld():
-
-    Rt = 1.0
-
-    m = 10
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    npoint = 8
+    exp_start = cfg['xlim'][0]
+    exp_end = cfg['xlim'][1]
+    npoint = cfg['npoint']
     ns = np.logspace(exp_start, exp_end, npoint)
 
-    nsm = 100
-    sa0 = sa_basquin(ns, m, Rt)
-    sm = np.linspace(0., +1., nsm)
-
-    sas_go = np.zeros((nsm, npoint))
-    sas_ge = np.zeros((nsm, npoint))
-    sas_lo = np.zeros((nsm, npoint))
-    sas_swt = np.zeros((nsm, npoint))
-    sas_tosa = np.zeros((nsm, npoint))
-    sas_b = np.zeros((nsm, npoint))
-    sas_r = np.zeros((nsm, npoint))
-
-    alp_start = 1.0
-    m_alp = 30
-    alp = sa_basquin(ns, m_alp, alp_start)
-
-    for smi, sm_ in enumerate(sm):
-        sas_go[smi, :] = sa_goodman(sa0, sm_, Rt)
-        sas_ge[smi, :] = sa_gerber(sa0, sm_, Rt)
-        sas_lo[smi, :] = sa_loewenthal(sa0, sm_, Rt)
-        sas_swt[smi, :] = sa_swt(sa0, sm_, Rt)
-        sas_tosa[smi, :] = sa_tosa(sa0, sm_, Rt, alp)
-        sas_b[smi, :] = sa_boerstra(sa0, sm_, Rt, alp)
+    #######################################################################
+    snf = SNFit(fit_type='stuessi-boerstra')
+    rst[snf.fit_type] = snf
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.Re_start = cfg['Re_start']
+    snf.Na_start = cfg['Na_start']
+    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
+    snf.touch_basquin_boerstra(cfg['p_touch'])
 
     #######################################################################
-    figname = 'cld_test'
+    snf = SNFit(fit_type='basquin-goodman')
+    rst[snf.fit_type] = snf
     #######################################################################
-    fig, ax = plt.subplots()
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.fit_sn(cfg['include_weibull'])
+    snf.project_data(ns)
+    snf.fit_cld()
 
-    for i, n in enumerate(ns):
+    #######################################################################
+    snf = SNFit(fit_type='basquin-boerstra')
+    rst[snf.fit_type] = snf
+    #######################################################################
+    snf.load_data(data, grp_entries)
+    snf.m_start = cfg['m_start']
+    snf.Rt_start = cfg['Rt_start']
+    snf.Na_start = cfg['Na_start']
+    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
+
+    return rst
+
+
+def normalize_fit_paper_data():
+    # normalize data
+    df = normalize_sn_data(Td_tar=23.0, Tgd_tar=86.1)
+    # fit data
+    data, grp_entries, cfg = setup_fit(df)
+    rst = process_fit(data, grp_entries, cfg)
+    return rst
+
+
+def get_markov(path_data):
+    # Markov matrices obtained via rainflow-counting of bending moment time
+    # series obtained from aero-servo-elastic load simulations using
+    # Modelica Library for Wind Turbines (MoWiT) for the DTU 10 MW RWT, DLC 1.1
+    # Bending moment histories were transformed into strain histories at the
+    # blade division points via Euler-Bernoulli beam theory
+    # Further information about the DTU RWT:
+    # http://www.innwind.eu/-/media/Sites/innwind/Publications/Deliverables/DeliverableD1-21ReferenceWindTurbinereport_INNWIND-EU.ashx
+    # Further information about the used beam model:
+    # https://doi.org/10.5281/zenodo.1494044
+
+    rm_epoxy = 73.5E6  # epoxy strength (used to de-normalize stress exposure)
+    v_ave_hub = 0.2 * 50.
+    v = np.arange(3, 25 + 2, 2)
+
+    z_pos = np.array([0, 5.37977, 11.1031, 17.0953, 23.2647, 29.5076,
+                      35.7156, 41.7824, 47.6111, 53.1201, 58.247, 62.9501,
+                      67.2076, 71.0159, 74.386, 77.3402, 79.9085, 82.1252,
+                      84.0265, 85.6487, 86.366])
+
+    design_life = 25
+    d_time = design_life * 365.25 * 24 * 60 * 60  # seconds of 20 years
+    time_sim = 600.  # sec
+    d_time_factor = d_time / time_sim  # time series length
+
+    def rayleigh_probability_density(v, v_ave_hub):
+        '''
+        Gasch, 2011, Windkraftanlagen, Eq. 4.13
+        '''
+        p = 0.5 * np.pi * v / v_ave_hub ** 2 * \
+            np.exp(- 0.25 * np.pi * (v / v_ave_hub) ** 2)
+        return p
+
+    p = rayleigh_probability_density(v, v_ave_hub)
+    delta = np.diff(v)[0]
+    weight = p * delta
+    np.sum(weight)
+
+    fname = 'markov_dp0'
+    with open(os.path.join(path_data, fname + '.pkl'), 'rb') as myrestoredata:
+        m = pickle.load(myrestoredata)
+    # [vwind, z, ('triax', 45)]
+
+    material = 'triax'
+    orientation = 45
+    zidx = 4  # max chord
+    markovs = []
+    for vidx in range(len(v)):
+        markov = m[v[vidx], zidx, material, orientation]
+        markov[:, 2] = markov[:, 2] * weight[vidx]
+        markovs.append(markov)
+
+    markov_c = np.concatenate(markovs)
+
+    sa = markov_c[:, 0] * rm_epoxy  # markov matrix contains stress exposure
+    sm = markov_c[:, 1] * rm_epoxy  # markov matrix contains stress exposure
+    n = markov_c[:, 2] * d_time_factor
+
+    R = R_ratio(sm, sa)
+    smax = smax_sa(sa, R)
+
+    dfl = pd.DataFrame({'sa': sa,
+                        'sm': sm,
+                        'n': n,
+                        'R': R,
+                        'smax': smax,
+                        })
+    return dfl
+
+
+class SNTestCase(unittest.TestCase):
+
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+
+        self.path_data = 'data'
+        # Create a temporary directory
+        self.test_dir = tempfile.mkdtemp(dir=os.getcwd())
+
+    def tearDown(self):
+        unittest.TestCase.tearDown(self)
+        # Remove the directory after the test
+        shutil.rmtree(self.test_dir)
+
+    def test_cld(self):
+
+        self.assertAlmostEqual(
+            sa_boerstra(sa0=1.0, sm=0.5, Rt=1.0, alp=1.0) /
+            sa_goodman(sa0=1.0, sm=0.5, Rt=1.0),
+            1.0, places=4)
+
+        self.assertAlmostEqual(
+            sa_boerstra(sa0=1.0, sm=0.5, Rt=1.0, alp=2.0) /
+            sa_gerber(sa0=1.0, sm=0.5, Rt=1.0),
+            1.0, places=4)
+
+        Rt = 1.0
+        m = 10
+        exp_start = 0  # 10^0
+        exp_end = 7  # 10^7
+        npoint = 8
+        ns = np.logspace(exp_start, exp_end, npoint)
+
+        nsm = 100
+        sa0 = sa_basquin(ns, m, Rt)
+        sm = np.linspace(0., +1., nsm)
+
+        sas_go = np.zeros((nsm, npoint))
+        sas_ge = np.zeros((nsm, npoint))
+        sas_lo = np.zeros((nsm, npoint))
+        sas_swt = np.zeros((nsm, npoint))
+        sas_tosa = np.zeros((nsm, npoint))
+        sas_b = np.zeros((nsm, npoint))
+
+        alp_start = 1.0
+        m_alp = 30
+        alp = sa_basquin(ns, m_alp, alp_start)
+
+        for smi, sm_ in enumerate(sm):
+            sas_go[smi, :] = sa_goodman(sa0, sm_, Rt)
+            sas_ge[smi, :] = sa_gerber(sa0, sm_, Rt)
+            sas_lo[smi, :] = sa_loewenthal(sa0, sm_, Rt)
+            sas_swt[smi, :] = sa_swt(sa0, sm_)
+            sas_tosa[smi, :] = sa_tosa(sa0, sm_, alp)
+            sas_b[smi, :] = sa_boerstra(sa0, sm_, Rt, alp)
+
+        fig, ax = plt.subplots()
+        for i, _ in enumerate(ns):
+            col = next(ax._get_lines.prop_cycler)['color']
+            ax.plot(sm, sas_go[:, i], '--', color=col)
+            ax.plot(sm, sas_ge[:, i], ':', color=col)
+            #ax.plot(sm, sas_lo[:, i], '--', color=col)
+            #ax.plot(sm, sas_swt[:, i], '--', color=col)
+            #ax.plot(sm, sas_tosa[:, i], '--', color=col)
+            ax.plot(sm, sas_b[:, i], '-', color=col)
+
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.legend()
+        plt.close(fig)
+
+    def test_m_basquin(self):
+
+        exp_start = 0  # 10^0
+        exp_end = 8  # 10^7
+        ns = np.logspace(exp_start, exp_end, 1000)
+
+        Na = 1E4
+        Rt = 71.5E6
+        Re = 22.3E6
+        m = 10
+        smax_b = smax_basquin_boerstra(
+            ns,
+            R=-1,
+            m=m,
+            Rt=Rt,
+            alp_c=[1., 0.],
+            alp_fit='exp')
+        smax_s = smax_stuessi_boerstra_weibull(
+            ns,
+            R=-1,
+            m=m,
+            Rt_fit=Rt,
+            Re_fit=Re,
+            Na=Na,
+            alp_c=[1., 0., 0.],
+            alp_fit='exp',
+            p=0.50,
+            alpha=-5.6E6,
+            beta=6.2E6,
+            gamma=3.9)
+        smax_s_na = smax_stuessi_boerstra_weibull(
+            Na,
+            R=-1,
+            m=m,
+            Rt_fit=Rt,
+            Re_fit=Re,
+            Na=Na,
+            alp_c=[1., 0., 0.],
+            alp_fit='exp',
+            p=0.50,
+            alpha=-5.6E6,
+            beta=6.2E6,
+            gamma=3.9)
+
+        # calculate partial derivate of a Basquin-like linear curve
+        # through the inflection point of Stuessi's curve
+        Ra = 0.5 * (Rt + Re)
+        dn_dsa_b = dn_dsa_basquin(Na, Ra, Ra, m)
+        dn_dsa_s = dn_dsa_stuessi(Ra, m, Rt, Re, Na)
+
+        self.assertAlmostEqual(dn_dsa_b / dn_dsa_s, 1.0, places=4)
+
+        # construct two points and test slope functions
+        N1 = 100
+        N2 = Na
+        sa1 = smax_basquin_boerstra(
+            N1,
+            R=-1,
+            m=m,
+            Rt=Rt,
+            alp_c=[1., 0.],
+            alp_fit='exp')
+        sa2 = smax_basquin_boerstra(
+            N2,
+            R=-1,
+            m=m,
+            Rt=Rt,
+            alp_c=[1., 0.],
+            alp_fit='exp')
+
+        m_calc1 = m_basquin(Rt, sa1, N1)
+        m_calc2 = m_basquin_2p(sa1, N1, sa2, N2)
+
+        self.assertAlmostEqual(m_calc1 / m, 1.0, places=4)
+        self.assertAlmostEqual(m_calc2 / m, 1.0, places=4)
+
+        fig, ax = plt.subplots()
+
         col = next(ax._get_lines.prop_cycler)['color']
-        #ax.plot(sm, sas_go[:, i], '-', color=col)
-        #ax.plot(sm, sas_ge[:, i], '--', color=col)
-        #ax.plot(sm, sas_lo[:, i], '--', color=col)
-        #ax.plot(sm, sas_swt[:, i], '--', color=col)
-        #ax.plot(sm, sas_tosa[:, i], '--', color=col)
-        ax.plot(sm, sas_b[:, i], '-', color=col)
-        #ax.plot(sm, sas_r[:, i], '-.', color=col)
+        ax.loglog(ns,
+                  smax_b * 1E-6,
+                  linestyle='-',
+                  label=r'Basquin',
+                  color=col)
 
-    ax.set_ylabel(sa_label)
-    ax.set_xlabel(sm_label)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def test_cld_fit(folder):
-
-    with open('cld_fit_rim.pkl', 'rb') as myrestoredata:
-        cldf = cPickle.load(myrestoredata)
-    sm0 = cldf['sms'][0, 0]
-    sa0 = cldf['sas'][-1, 0]
-    cldf['sms'] = cldf['sms'] / sm0
-    cldf['sas'] = cldf['sas'] / sa0
-
-    nset = len(cldf['sms'])
-
-    Rt = 1.0
-
-    #m = 10
-
-    ns = cldf['ns']
-    npoint = len(ns)
-
-    nsm = 1000
-    #sa0 = sa_basquin(ns, m, Rt)
-    sm = np.linspace(0., +1., nsm)
-
-    sas_b = np.zeros((nsm, npoint))
-
-    #alp_start = 1.0
-    #m_alp = 30
-    #alp = sa_basquin(ns, m_alp, alp_start)
-
-    alp = np.zeros(npoint)
-    for ni in range(npoint):
-        xdata = sm_set = cldf['sms'][:, ni]
-        ydata = sa_set = cldf['sas'][:, ni]
-        sa0 = cldf['sas'][-1, ni]
-
-        def func(x, alp):
-            return sa_boerstra(sa0, x, Rt, alp)
-
-        from scipy.optimize import curve_fit
-        popt, pcov = curve_fit(func, xdata, ydata)
-        alp[ni] = popt[0]
-
-        sas_b[:, ni] = sa_boerstra(sa0, sm, Rt, alp[ni])
-
-    # fit over n
-    def func2(x, a, b, c):
-        return a * x**-b + c
-
-    xdata = ns
-    ydata = alp
-    popt, pcov = curve_fit(func2, xdata, ydata)
-    alp_opt = popt
-
-    # fit over sa_R=-1
-    import scipy.optimize as optimize
-
-    def fit_N_stuessi(xdata, ydata,
-                      m_start=11.,
-                      Rt_start=1.,
-                      Re_start=0.25,
-                      Na_start=0.3,
-                      n0=1.):
-        initial_guess = [m_start, Na_start]
-
-        def objective(params):
-            m, Na = params  # multiple design variables
-            crits = []
-
-            def func(xi, m, Rt, Re, Na, n0):
-                yi = Na + m * np.log10((Re - xi) / (xi - Rt + 1E-10))
-                return yi
-
-            for _, (xi, yact) in enumerate(zip(xdata, ydata)):
-                '''
-                Ni = N_stuessi(
-                    xi, m=m, Rt=Rt_start,
-                    Re=Re_start, Na=Na, n0=n0)
-                '''
-
-                yi = func(xi, m, Rt_start, Re_start, Na, n0)
-
-                crit1 = (yi - yact)**2
-
-                crits.append(crit1)
-            '''
-            import matplotlib.pyplot as plt
-            #smax_ = np.linspace(smin_start, smax_start, 100)
-            sa_ = np.linspace(Re_start, Rt_start, 100)
-            fig, ax = plt.subplots()
-            ax.plot(sa_, func(sa_, m, Rt_start, Re_start, Na, n0))
-            #plt.ylim(-1., None)
-            #plt.xlim(15E6, 15.1)
-            '''
-            critsum = np.sum(np.array(crits))  # objective function
-            return critsum
-
-        options = {}
-        #options['xtol'] = 1E-1
-        options['disp'] = False
-        options['maxiter'] = 1E5
-        options['maxfev'] = 1E5
-        result = optimize.minimize(
-            objective, initial_guess, method='Nelder-Mead', options=options)
-        if result.success:
-            fitted_params = result.x
-        else:
-            raise ValueError(result.message)
-
-        m_fit,  Na_fit = fitted_params
-
-        return m_fit, Rt_start, Re_start, Na_fit
-
-    xdata = sas_b[0, :]
-    alp_opt2 = fit_N_stuessi(xdata, ydata,
-                             m_start=0.25,
-                             Rt_start=1.,
-                             Re_start=0.24,
-                             Na_start=.5,
-                             n0=1.)
-
-    # def func3(x):
-    #    return N_stuessi(sa=x, m=1.3, Rt=1.0, M=1, Re=0.25, Na=0.38, n0=1.0)
-    #xdata = sas_b[0, :]
-    #f3_opt, pcov = curve_fit(func3, xdata, ydata)
-    #ppoly = np.polyfit(xdata, ydata, 3)
-    #p = np.poly1d(ppoly)
-
-    #######################################################################
-    figname = 'cld_test'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for i, n in enumerate(ns):
         col = next(ax._get_lines.prop_cycler)['color']
-        #ax.plot(sm, sas_go[:, i], '-', color=col)
-        #ax.plot(sm, sas_ge[:, i], '--', color=col)
-        #ax.plot(sm, sas_lo[:, i], '--', color=col)
-        #ax.plot(sm, sas_swt[:, i], '--', color=col)
-        #ax.plot(sm, sas_tosa[:, i], '--', color=col)
-        ax.plot(sm, sas_b[:, i], '-', color=col)
-        #ax.plot(sm, sas_r[:, i], '-.', color=col)
 
-        ax.plot(cldf['sms'][:, i], cldf['sas'][:, i],
-                'o--', color=col, label=r'$N=\num{%0.0E}$' % (n))
+        ax.loglog(ns, smax_s * 1E-6, linestyle='-',
+                  label=r'Stuessi')
 
-    ax.set_ylabel(sa_label)
-    ax.set_xlabel(sm_label)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    npoint = 8
-    nsf = np.logspace(exp_start, exp_end, 1000)
-
-    #######################################################################
-    figname = 'cld_test_alp'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    ax.semilogx(ns, alp, 'o', label=r'Boerstra exponent $\alpha$')
-
-    ax.semilogx(nsf, func2(nsf, *alp_opt), '-',
-                label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (alp_opt[0], alp_opt[1], alp_opt[2]))
-
-    ax.set_ylabel(alp_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(None, 1)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-    #######################################################################
-    figname = 'cld_test_alp_sa'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    ax.plot(sas_b[0, :], alp, 'o', label=r'Boerstra exponent $\alpha$')
-
-    ax.plot(sas_b[0, :], N_stuessi(alp, *alp_opt2), '-', label=r'Polyfit')
-
-    # ax.semilogx(nsf, func2(nsf, *alp_opt), '-',
-    # label=r'Fit $%0.2fx^{-%0.2f}+%0.2f$' % (alp_opt[0], alp_opt[1],
-    # alp_opt[2]))
-
-    ax.set_ylabel(alp_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(None, 1)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
-
-
-def test_stuessi_boerstra(folder):
-
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    npoint = 100
-    ns = np.logspace(exp_start, exp_end, npoint)
-
-    #nR = 10
-    R = [-1.4, -1., 0.1]  # np.linspace(-1.,-1.1, 0.1, nR)
-    nR = len(R)
-
-    m = 4.6
-    Rt = 60.E+6
-    Re = 15.E+6
-    Na = 1650
-    #alp = 0.95
-    M = 1.
-
-    a_ = 0.63
-    b_ = 0.18
-    c_ = 0.37
-
-    alp_c = [a_, b_, c_]
-
-    alp_ = explogx(ns, a_, b_, c_)
-
-    #alp_ = explogx(ns, a_, b_, c_)
-
-    #smax_ = np.linspace(60E6, 15E6, 1000)
-    #N_smax_stuessi_boerstra(smax_, R[0], m, Rt, Re, Na, alp=0.6, n0=1.0)
-
-    smax = np.zeros((nR, npoint))
-    smax_sb1 = np.zeros((nR, npoint))
-    smax_sg = np.zeros((nR, npoint))
-    for Ri, R_ in enumerate(R):
-        smax[Ri, :] = smax_stuessi_boerstra(
-            ns, R_, m, Rt, Re, Na, alp_c, n0=1.0)
-        smax_sb1[Ri, :] = smax_stuessi_boerstra(
-            ns, R_, m, Rt, Re, Na, [1., 0., 0.], n0=1.0)
-        smax_sg[Ri, :] = smax_stuessi_goodman(
-            ns, R_, m, Rt, M, Re, Na, n0=1.0)
-
-    #######################################################################
-    figname = 'sn_test'
-    #######################################################################
-    fig, ax = plt.subplots()
-
-    for Ri, R_ in enumerate(R):
         col = next(ax._get_lines.prop_cycler)['color']
-        ax.semilogx(ns, smax[Ri, :] * 1E-6, '-',
-                    color=col, label=r'R=%0.2f' % R_)
-        ax.semilogx(ns, smax_sb1[Ri, :] * 1E-6, '--',
-                    color=col, label=r'R=%0.2f' % R_)
-        ax.semilogx(ns, smax_sg[Ri, :] * 1E-6, '-.',
-                    color=col, label=r'R=%0.2f' % R_)
-    #ax.loglog(ns, smax * 1E-6)
+        ax.loglog(Na,  smax_s_na * 1E-6, '+', color=col)
+        ax.loglog([ns[int(1E3 * 2 / 3)], ns[-1]],
+                  np.r_[Re, Re] * 1E-6, ':', color=col)
+        ax.loglog([ns[0], ns[int(1E3 * 1 / 3)]],
+                  np.r_[Rt, Rt] * 1E-6, ':', color=col)
 
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(10, 70)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
+        ax.legend()
+        plt.close(fig)
 
+    def test_normalize(self):
 
-def test_basquin_boerstra(folder):
+        # normalize data
+        df = normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0)
+        df.to_csv(os.path.join(self.test_dir, 'df_750.dat'))
 
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    npoint = 100
-    ns = np.logspace(exp_start, exp_end, npoint)
+        dsig_max_exp = -9.829785E6  # Rosemeier and Antoniou 2021, Fig2
+        dsig_max = df['sig_max_tar'] - df['sig_max_cor']
 
-    #nR = 10
-    R = [-1, 0.1, 1.0]  # np.linspace(-1.,-1.1, 0.1, nR)
-    nR = len(R)
+        self.assertAlmostEqual(dsig_max[0] / dsig_max_exp, 1.0, places=4)
 
-    m = 4.6
-    Rt = 60.E+6
-    Re = 15.E+6
-    Na = 1650
-    #alp = 0.95
-    M = 1.
+    def test_fit(self):
 
-    a_ = 0.63
-    b_ = 0.18
-    c_ = 0.37
+        rst = normalize_fit_paper_data()
 
-    alp_c = [a_, b_, c_]
+        for fit_type, snf in rst.items():
+            # Rosemeier and Antoniou 2021, Fig4a
+            if fit_type == 'basquin-goodman':
+                m_fit_exp = 10.36771155004513
+                self.assertAlmostEqual(
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
 
-    alp_ = explogx(ns, a_, b_, c_)
+                Rt_fit_exp = 63312517.89557406
+                self.assertAlmostEqual(
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
 
-    #alp_ = explogx(ns, a_, b_, c_)
+                alpha_exp = -13211256.353476021
+                self.assertAlmostEqual(
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
 
-    #smax_ = np.linspace(60E6, 15E6, 1000)
-    #N_smax_stuessi_boerstra(smax_, R[0], m, Rt, Re, Na, alp=0.6, n0=1.0)
+                beta_exp = 15352705.466147764
+                self.assertAlmostEqual(
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
 
-    smax = np.zeros((nR, npoint))
-    smax_bb = np.zeros((nR, npoint))
-    for Ri, R_ in enumerate(R):
-        smax[Ri, :] = smax_basquin_goodman(ns, R_, m, Rt, M=1.)
-        smax_bb[Ri, :] = smax_basquin_boerstra(
-            ns, R_, m, Rt, alp_c=alp_c)
+                gamma_exp = 2.503493845340379
+                self.assertAlmostEqual(
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
 
-    #######################################################################
-    figname = 'sn_test'
-    #######################################################################
-    fig, ax = plt.subplots()
+            # Rosemeier and Antoniou 2021, Fig4c
+            elif fit_type == 'basquin-boerstra':
+                m_fit_exp = 11.246422147405845
+                self.assertAlmostEqual(
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
 
-    for Ri, R_ in enumerate(R):
-        col = next(ax._get_lines.prop_cycler)['color']
-        ax.semilogx(ns, smax[Ri, :] * 1E-6, '-',
-                    color=col, label=r'R=%0.2f' % R_)
-        ax.semilogx(ns, smax_bb[Ri, :] * 1E-6, '--',
-                    color=col, label=r'R=%0.2f' % R_)
-    #ax.loglog(ns, smax * 1E-6)
+                Rt_fit_exp = 69027435.35715565
+                self.assertAlmostEqual(
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
 
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(10, 70)
-    ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
+                alpha_exp = -3724357.2431028215
+                self.assertAlmostEqual(
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
 
+                beta_exp = 4352004.146272558
+                self.assertAlmostEqual(
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
 
-def test_touch(folder):
-    exp_start = 0  # 10^0
-    exp_end = 7  # 10^7
-    npoint = 100
-    ns = np.logspace(exp_start, exp_end, npoint)
+                gamma_exp = 1.6145599959718917
+                self.assertAlmostEqual(
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
 
-    #nR = 10
-    R = [-1.4, -1., 0.1]  # np.linspace(-1.,-1.1, 0.1, nR)
-    nR = len(R)
+            # Rosemeier and Antoniou 2021, Fig4e
+            elif fit_type == 'stuessi-boerstra':
+                m_fit_exp = 8.045079162278064
+                self.assertAlmostEqual(
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
 
-    m = 4.6
-    Rt = 60.E+6
-    Re = 15.E+6
-    Na = 1650
-    n0 = 1.
-    #alp = 0.95
-    M = 1.
+                Rt_fit_exp = 71471963.62961282
+                self.assertAlmostEqual(
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
 
-    a_ = 0.63
-    b_ = 0.18
-    c_ = 0.37
+                Re_fit_exp = 22229821.480521865
+                self.assertAlmostEqual(
+                    snf.sn_fit['Re_fit'] / Re_fit_exp, 1.0, places=4)
 
-    alp_c = [a_, b_, c_]
+                Na_exp = 162.51394808464843
+                self.assertAlmostEqual(
+                    snf.sn_fit['Na'] / Na_exp, 1.0, places=4)
 
-    R = -1
+                alpha_exp = -5630491.841200271
+                self.assertAlmostEqual(
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
 
-    s_sb = smax_stuessi_boerstra(
-        ns, R, m, Rt, Re, Na, alp_c)
+                beta_exp = 6229927.499626992
+                self.assertAlmostEqual(
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
 
-    def fun(n_):
-        mt = m_touch(n_, m, Rt, Re, Na, n0)
-        lhs = dsa_dn_basquin(n_, mt, Rt)
-        rhs = dsa_dn_stuessi(n_, m, Rt, Re, Na, n0)
-        return lhs - rhs
+                gamma_exp = 3.9276920440476264
+                self.assertAlmostEqual(
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
 
-    '''
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.semilogx(ns, fun(ns))
-    plt.ylim(-1., None)
-    plt.xlim(15E6, 15.1E6)
-    '''
+                # Rosemeier and Antoniou 2021, Fig5c
+                n_test = 1E+5
+                alp_exp = 0.4351147
+                self.assertAlmostEqual(
+                    snf.alp_c(np.log10(n_test)) / alp_exp, 1.0, places=4)
 
-    N_start = Na
-    N_end = 1E+8
-    Nt = bisection(fun, lower=N_start, upper=N_end,
-                   tol=1e-6, maxiter=100, callback=None)
+                # Rosemeier and Antoniou 2021, Fig5c, Eq.40
+                a_exp = 0.7448715911447118
+                d_exp = 0.120626356404657
+                self.assertAlmostEqual(snf.alpt_c[0] / a_exp, 1.0, places=4)
+                self.assertAlmostEqual(snf.alpt_c[1] / d_exp, 1.0, places=4)
 
-    mt = m_touch(Nt, m, Rt, Re, Na, n0)
+                # Rosemeier and Antoniou 2021, Fig5d
+                Rt_p_exp = 68766431.98987138
+                mt_exp = 9.332335514878917
+                Nt_exp = 7252.230208944099
+                self.assertAlmostEqual(
+                    snf.sn_fit['Rt_p'] / Rt_p_exp, 1.0, places=4)
+                self.assertAlmostEqual(
+                    snf.sn_fit['mt'] / mt_exp, 1.0, places=4)
+                self.assertAlmostEqual(
+                    snf.sn_fit['Nt'] / Nt_exp, 1.0, places=4)
 
-    s_bb = smax_basquin_boerstra(ns, R, mt, Rt, alp_c)
+        # Rosemeier and Antoniou 2021, Fig5d
+        fig, ax = plt.subplots()
 
-    #######################################################################
-    figname = 'sn_touch_test'
-    #######################################################################
-    fig, ax = plt.subplots()
+        exp_start = 0
+        exp_end = 8
+        ns = np.logspace(exp_start, exp_end, 1000)
+        p = 0.05  # failure probability
 
-    #col = next(ax._get_lines.prop_cycler)['color']
-    ax.semilogx(ns, s_sb * 1E-6, '-')
-    ax.semilogx(ns, s_bb * 1E-6, '-')
+        for fit_type, snf in rst.items():
+            ax.set_prop_cycle(None)  # reset cycler
+            # ax.set_prop_cycle(custom_cycler)
+            if not fit_type == 'basquin-boerstra':
+                if fit_type == 'basquin-goodman':
+                    linestyle = '-.'
 
-    #ax.loglog(ns, smax * 1E-6)
+                elif fit_type == 'stuessi-boerstra':
+                    linestyle = '-'
+                    linestyle_bb = ':'
 
-    ax.set_ylabel(smax_label)
-    ax.set_xlabel(n_label)
-    ax.set_ylim(10, 70)
-    # ax.legend()
-    savefig(fig, folder=folder, figname=figname)
-    plt.close(fig)
+                grps = snf.cyc_data['grplist']
+                cyc_stress_max = snf.cyc_data['cyc_stress_max']
+                cyc_cycles = snf.cyc_data['cyc_cycles']
+                cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
+                m_fit = snf.sn_fit['m_fit']
+                Rt_fit = snf.sn_fit['Rt_fit']
+                if fit_type == 'stuessi-boerstra':
+                    Re_fit = snf.sn_fit['Re_fit']
+                    Na_fit = snf.sn_fit['Na']
+                    Rt_p = snf.sn_fit['Rt_p']
+                    mt = snf.sn_fit['mt']
+                    Nt = snf.sn_fit['Nt']
+                if not fit_type == 'basquin-goodman':
+                    alp_c = snf.alp_c
+                    alp_fit = snf.alp_fit
+                alp_smax_fit = snf.sn_fit['alpha']
+                bet_smax_fit = snf.sn_fit['beta']
+                gam_smax_fit = snf.sn_fit['gamma']
+
+                gidxs = range(len(grps))
+
+                for gidx, grp in zip(gidxs, grps):
+                    col = next(ax._get_lines.prop_cycler)['color']
+                    if not cyc_ratio_grp[gidx] == 1:  # skip R=1 curves
+                        if fit_type == 'basquin-goodman':
+                            smax = smax_basquin_goodman_weibull(
+                                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
+                                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                        elif fit_type == 'stuessi-boerstra':
+                            smax = smax_stuessi_boerstra_weibull(
+                                ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
+                                Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
+                                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                        ax.semilogx(ns,
+                                    smax * 1E-6,
+                                    linestyle=linestyle,
+                                    color=col)
+                        # add basquin-boerstra tangent and tangent point
+                        if fit_type == 'stuessi-boerstra':
+                            smax_bbt = smax_basquin_boerstra(
+                                ns,
+                                R=cyc_ratio_grp[gidx],
+                                m=mt,
+                                Rt=Rt_p,
+                                alp_c=snf.alpt_c,
+                                alp_fit=snf.alpt_fit,)
+                            st = smax_basquin_boerstra(
+                                Nt,
+                                R=cyc_ratio_grp[gidx],
+                                m=mt,
+                                Rt=Rt_p,
+                                alp_c=snf.alpt_c,
+                                alp_fit=snf.alpt_fit,)
+
+                            ax.semilogx(ns,
+                                        smax_bbt * 1E-6,
+                                        linestyle=linestyle_bb,
+                                        color=col)
+                            ax.semilogx(Nt,
+                                        st * 1E-6,
+                                        linestyle='',
+                                        marker='+',
+                                        color=col)
+
+                    # add measurement data points
+                    for s, n in zip(cyc_stress_max[grp], cyc_cycles[grp]):
+                        ax.semilogx(n, s * 1E-6, 'd', color=col, zorder=2.2)
+
+                # add R=0.5
+                R_ = 0.5
+                col = next(ax._get_lines.prop_cycler)['color']
+                if fit_type == 'basquin-goodman':
+                    smax = smax_basquin_goodman_weibull(
+                        ns, R=R_, m=m_fit, Rt_fit=Rt_fit,
+                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                elif fit_type == 'stuessi-boerstra':
+                    smax = smax_stuessi_boerstra_weibull(
+                        ns, R=R_, m=m_fit, Rt_fit=Rt_fit,
+                        Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
+                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+
+                ax.semilogx(ns,
+                            smax * 1E-6,
+                            linestyle=linestyle,
+                            color=col)
+
+                # add basquin-boerstra tangent and tangent point
+                if fit_type == 'stuessi-boerstra':
+                    smax_bbt = smax_basquin_boerstra(
+                        ns,
+                        R=R_,
+                        m=mt,
+                        Rt=Rt_p,
+                        alp_c=snf.alpt_c,
+                        alp_fit=snf.alpt_fit)
+                    st = smax_basquin_boerstra(
+                        Nt,
+                        R=R_,
+                        m=mt,
+                        Rt=Rt_p,
+                        alp_c=snf.alpt_c,
+                        alp_fit=snf.alpt_fit)
+
+                    ax.semilogx(ns,
+                                smax_bbt * 1E-6,
+                                linestyle=linestyle_bb,
+                                color=col)
+                    ax.semilogx(Nt,
+                                st * 1E-6,
+                                linestyle='',
+                                marker='+',
+                                color=col)
+
+        plt.close(fig)
+
+    def test_bbt_touch(self):
+
+        rst = normalize_fit_paper_data()
+
+        smax_bbt_sb_exp = np.array(
+            [1.00000004, 1.01699674, 1.01809091, 1.00831964, 0.99940094,
+             0.99521156])
+
+        Rs = [-1, -0.8, -0.5, 0.1, 0.5, 0.8]
+        smax_sb = np.zeros_like(Rs)
+        smax_bbt = np.zeros_like(Rs)
+        for i, R in enumerate(Rs):
+            smax_sb[i] = smax_stuessi_boerstra_weibull(
+                p=0.05,
+                n=rst['stuessi-boerstra'].sn_fit['Nt'],
+                R=R,
+                Rt_fit=rst['stuessi-boerstra'].sn_fit['Rt_fit'],
+                m=rst['stuessi-boerstra'].sn_fit['m_fit'],
+                Re_fit=rst['stuessi-boerstra'].sn_fit['Re_fit'],
+                Na=rst['stuessi-boerstra'].sn_fit['Na'],
+                alpha=rst['stuessi-boerstra'].sn_fit['alpha'],
+                beta=rst['stuessi-boerstra'].sn_fit['beta'],
+                gamma=rst['stuessi-boerstra'].sn_fit['gamma'],
+                alp_c=rst['stuessi-boerstra'].alp_c,
+                alp_fit=rst['stuessi-boerstra'].alp_fit
+            )
+
+            smax_bbt[i] = smax_basquin_boerstra(
+                n=rst['stuessi-boerstra'].sn_fit['Nt'],
+                R=R,
+                m=rst['stuessi-boerstra'].sn_fit['mt'],
+                Rt=rst['stuessi-boerstra'].sn_fit['Rt_p'],
+                alp_c=rst['stuessi-boerstra'].alpt_c,
+                alp_fit='exp')
+
+            smax_bbt_sb = smax_bbt[i] / smax_sb[i]
+            self.assertAlmostEqual(
+                smax_bbt_sb / smax_bbt_sb_exp[i], 1.0, places=4)
+
+    def test_smax_N(self):
+
+        rst = normalize_fit_paper_data()
+
+        p = 0.05
+        smax_exp = 29986882.307854675
+        n_exp = 1E4
+        R = 0.1
+        Rt_fit = rst['basquin-goodman'].sn_fit['Rt_fit']
+        m_fit = rst['basquin-goodman'].sn_fit['m_fit']
+        alpha = rst['basquin-goodman'].sn_fit['alpha']
+        beta = rst['basquin-goodman'].sn_fit['beta']
+        gamma = rst['basquin-goodman'].sn_fit['gamma']
+
+        smax_ns_test = smax_basquin_goodman_weibull(
+            n_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+        n_smaxs_test = N_basquin_goodman_weibull(
+            smax_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+
+        # plot both curves against each other
+        ns = np.logspace(0, 20, 1000)
+        smaxs = np.linspace(0, 80E6, 1000)
+
+        smax_ns = smax_basquin_goodman_weibull(
+            ns, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+        n_smaxs = N_basquin_goodman_weibull(
+            smaxs, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+
+        _, ax = plt.subplots()
+        ax.semilogx(ns, smax_ns * 1E-6)
+        ax.semilogx(n_smaxs, smaxs * 1E-6, '--')
+        ax.set_xlim([1, 1E20])
+
+        # calculate endurance limit for each stress ratio of the collective
+
+        p = 0.05
+        smax_exp = 30E6
+        n_exp = 14846.154333689894
+        R = 0.1
+        Rt_fit = rst['basquin-boerstra'].sn_fit['Rt_fit']
+        m_fit = rst['basquin-boerstra'].sn_fit['m_fit']
+        alpha = rst['basquin-boerstra'].sn_fit['alpha']
+        beta = rst['basquin-boerstra'].sn_fit['beta']
+        gamma = rst['basquin-boerstra'].sn_fit['gamma']
+        alp_c = rst['basquin-boerstra'].alp_c
+        alp_fit = rst['basquin-boerstra'].alp_fit
+
+        smax_ns_test = smax_basquin_boerstra_weibull(
+            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+        n_smaxs_test = N_basquin_boerstra_weibull(
+            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+
+        # plot both curves against each other
+        ns = np.logspace(0, 12, 1000)
+        smaxs = np.linspace(0, 80E6, 1000)
+
+        smax_ns = smax_basquin_boerstra_weibull(
+            ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+        n_smaxs = N_basquin_boerstra_weibull(
+            smaxs, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+
+        _, ax = plt.subplots()
+        ax.semilogx(ns, smax_ns * 1E-6)
+        ax.semilogx(n_smaxs, smaxs * 1E-6, '--')
+        ax.set_xlim([1, 1E12])
+
+        p = 0.05
+        smax_exp = 29985020.771579303
+        n_exp_aki = 7474.234839677993
+        n_exp_exp = 7477.76333196836
+        R = 0.1
+        Rt_fit = rst['stuessi-boerstra'].sn_fit['Rt_fit']
+        m_fit = rst['stuessi-boerstra'].sn_fit['m_fit']
+        Re_fit = rst['stuessi-boerstra'].sn_fit['Re_fit']
+        Na_fit = rst['stuessi-boerstra'].sn_fit['Na']
+        alpha = rst['stuessi-boerstra'].sn_fit['alpha']
+        beta = rst['stuessi-boerstra'].sn_fit['beta']
+        gamma = rst['stuessi-boerstra'].sn_fit['gamma']
+
+        # use_akima:
+        alp_c = rst['stuessi-boerstra'].alp_c
+        alp_fit = rst['stuessi-boerstra'].alp_fit
+
+        smax_ns_test = smax_stuessi_boerstra_weibull(
+            n_exp_aki, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+        n_smaxs_test = N_stuessi_boerstra_weibull(
+            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
+        self.assertAlmostEqual(n_smaxs_test / n_exp_aki, 1.0, places=4)
+
+        # use exp
+        alp_fit = 'exp'
+        alp_c = rst['stuessi-boerstra'].alpt_c
+
+        smax_ns_test = smax_stuessi_boerstra_weibull(
+            n_exp_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+
+        n_smaxs_test = N_stuessi_boerstra_weibull(
+            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
+        self.assertAlmostEqual(n_smaxs_test / n_exp_exp, 1.0, places=4)
+
+        # plot both curves against each other
+        ns = np.logspace(0, 10, 1000)
+        smaxs = np.linspace(15E6, 80E6, 1000)
+
+        #smax_ns = smax_basquin_boerstra_weibull(ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+        smax_ns = smax_stuessi_boerstra_weibull(
+            ns, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+        n_smaxs = N_stuessi_boerstra_weibull(
+            smaxs, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+
+        _, ax = plt.subplots()
+        ax.semilogx(ns, smax_ns * 1E-6)
+        ax.semilogx(n_smaxs, smaxs * 1E-6, '-')
+        ax.set_xlim([1, 1E20])
+
+        smax_exp = 29984357.408227555
+        n_exp = 2099.240331438329
+        R = 0.1
+        Rt_p = rst['stuessi-boerstra'].sn_fit['Rt_p']
+        mt = rst['stuessi-boerstra'].sn_fit['mt']
+        alp_fit = 'exp'
+        alp_c = rst['stuessi-boerstra'].alpt_c
+
+        smax_ns_test = smax_basquin_boerstra_weibull(
+            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+        n_smaxs_test = N_basquin_boerstra_weibull(
+            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+
+        # plot both curves against each other
+        ns = np.logspace(0, 40, 1000)
+        smaxs = np.linspace(0, 80E6, 1000)
+
+        smax_ns = smax_basquin_boerstra(ns, R, mt, Rt_p, alp_c, alp_fit)
+        n_smaxs = N_basquin_boerstra(smaxs, R, mt, Rt_p, alp_c, alp_fit)
+
+        _, ax = plt.subplots()
+        ax.semilogx(ns, smax_ns * 1E-6)
+        ax.semilogx(n_smaxs, smaxs * 1E-6, '--')
+        ax.set_xlim([1, 1E12])
+
+    def test_damage(self):
+
+        # fit data
+        rst = normalize_fit_paper_data()
+
+        # get load collectives
+        dfl = get_markov(self.path_data)
+
+        # calculate permissible cycles for a load collective
+        dfl['N_bg'] = N_basquin_goodman_weibull(
+            smax=dfl['smax'].to_numpy(),
+            R=dfl['R'].to_numpy(),
+            m=rst['basquin-goodman'].sn_fit['m_fit'],
+            Rt_fit=rst['basquin-goodman'].sn_fit['Rt_fit'],
+            p=0.05,
+            alpha=rst['basquin-goodman'].sn_fit['alpha'],
+            beta=rst['basquin-goodman'].sn_fit['beta'],
+            gamma=rst['basquin-goodman'].sn_fit['gamma'],
+        )
+
+        dfl['N_bbt'] = N_basquin_boerstra(
+            smax=dfl['smax'].to_numpy(),
+            R=dfl['R'].to_numpy(),
+            m=rst['stuessi-boerstra'].sn_fit['mt'],
+            Rt=rst['stuessi-boerstra'].sn_fit['Rt_p'],
+            alp_c=rst['stuessi-boerstra'].alpt_c,
+            alp_fit='exp'
+        )
+
+        print('Number of roots not found (N_bbt):', np.sum(
+            np.isnan(dfl['N_bbt'].to_numpy())))
+
+        dfl['N_sb'] = N_stuessi_boerstra_weibull(
+            smax=dfl['smax'].to_numpy(),
+            R=dfl['R'].to_numpy(),
+            m=rst['stuessi-boerstra'].sn_fit['m_fit'],
+            Rt_fit=rst['stuessi-boerstra'].sn_fit['Rt_fit'],
+            Re_fit=rst['stuessi-boerstra'].sn_fit['Re_fit'],
+            alp_c=rst['stuessi-boerstra'].alp_c,
+            alp_fit='aki',
+            Na=rst['stuessi-boerstra'].sn_fit['Na'],
+            p=0.05,
+            alpha=rst['stuessi-boerstra'].sn_fit['alpha'],
+            beta=rst['stuessi-boerstra'].sn_fit['beta'],
+            gamma=rst['stuessi-boerstra'].sn_fit['gamma'],
+            n_end=1E14
+        )
+
+        print('Number of roots not found (N_sb):', np.sum(
+            np.isnan(dfl['N_sb'].to_numpy())))
+        # TODO: to avoid root finding issues, implement an akima1d interpolator,
+        # which interpolates gaps that might occur
+
+        dfl['D_sb'] = dfl['n'] / dfl['N_sb']
+        dfl['D_bbt'] = dfl['n'] / dfl['N_bbt']
+        dfl['D_bg'] = dfl['n'] / dfl['N_bg']
+
+        D_bg_sum = np.sum(dfl['D_bg'].to_numpy())
+        D_sb_sum = np.sum(dfl['D_sb'].to_numpy())
+        D_bbt_sum = np.sum(dfl['D_bbt'].to_numpy())
+
+        D_bg_sum_exp = 121.38093032386263
+        D_sb_sum_exp = 43.87132234272629
+        D_bbt_sum_exp = 158.88019749923558
+
+        self.assertAlmostEqual(D_bg_sum / D_bg_sum_exp, 1.0, places=4)
+        self.assertAlmostEqual(D_sb_sum / D_sb_sum_exp, 1.0, places=4)
+        self.assertAlmostEqual(D_bbt_sum / D_bbt_sum_exp, 1.0, places=4)
 
 
 if __name__ == '__main__':
-
-    smax_label = r'Max. stress $\sigma_\text{max}$ in \si{\mega \pascal}'
-    n_label = r'Cycles to failure $N$'
-    sa_label = r'Stress amplitude $\sigma_\text{a}$ in \si{\mega \pascal}'
-    sm_label = r'Mean stress $\sigma_\text{m}$ in \si{\mega \pascal}'
-    alp_label = r'Boerstra exponent $\alpha$'
-
-    # test_cld_fit(folder='')
-    # test_stuessi_boerstra(folder='')
-    # test_basquin_boerstra(folder='')
-    test_touch(folder='')
-
-    rev = '04'
-
-    folder = '_result' + '_rev' + rev
-
-    if os.path.exists(folder):
-        shutil.rmtree(folder)
-    os.makedirs(folder)
-
-    npoint = 8
-    # fit_basquin_stuessi_spabond(npoint)
-    # fit_basquin_stuessi_epon(npoint)
-    fit_basquin_stuessi_rim(npoint)
+    unittest.main()

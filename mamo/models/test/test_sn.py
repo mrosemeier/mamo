@@ -35,26 +35,17 @@ def normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0):
     sig_max_tar = Rt_norm_fiedler(
         dfe['ttg_cor'], ttg_tar, dfe['sig_max_cor'], m)
     dft = dfe.assign(ttg_tar=ttg_tar,
-                     sig_max_tar=sig_max_tar)
+                     smax=sig_max_tar)
 
     return dft
 
 
-def setup_fit(df):
-
-    # make data ready for sn fit
-    sig_a = sa_smax(df['sig_max_tar'], df['R'])
-    sig_m = sm_smax(df['sig_max_tar'], df['R'])
-
-    dff = df.assign(sig_a=sig_a,
-                    sig_m=sig_m)
-    # ID, sig_a, sig_m, ratio , cycles to failure
-    data = dff[['num', 'sig_a', 'sig_m', 'R', 'N']].to_numpy()
+def setup_fit(dff):
 
     # group data by stress ratio
     grp0_ids = dff[dff['R'] == 1.0].index.to_list()
-    grp1_ids = dff[dff['R'] <= 0.11][dff['R'] >= 0.09].index.to_list()
-    grp2_ids = dff[dff['R'] <= -0.9][dff['R'] >= -1.1].index.to_list()
+    grp1_ids = dff[(dff['R'] <= 0.11) & (dff['R'] >= 0.09)].index.to_list()
+    grp2_ids = dff[(dff['R'] <= -0.9) & (dff['R'] >= -1.1)].index.to_list()
     grp_entries = [grp0_ids, grp1_ids, grp2_ids]
 
     cfg = OrderedDict()
@@ -62,58 +53,47 @@ def setup_fit(df):
     cfg['Rt_start'] = 65.E+6
     cfg['Re_start'] = 13.E+6
     cfg['Na_start'] = 325
-    cfg['ylim'] = [10, 80]
-    cfg['xlim'] = [0, 8]
-    cfg['npoint'] = 17
-    cfg['include_weibull'] = False
-    cfg['alp_c'] = [1.0, 0, 0]
-    cfg['alp_idxs'] = [0,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-    cfg['nfilt'] = [0, 6, 8, 10, 12]
-    cfg['p_touch'] = 0.05
-    return data, grp_entries, cfg
+    cfg['N_fit_upper'] = 1E+8  # upper cycle bound for fitting
+    cfg['p_touch'] = 0.05  # SB quantile to touch BBt
+    return dff, grp_entries, cfg
 
 
-def process_fit(data, grp_entries, cfg):
+def process_fit(dff, grp_entries, cfg):
 
     rst = OrderedDict()
-
-    exp_start = cfg['xlim'][0]
-    exp_end = cfg['xlim'][1]
-    npoint = cfg['npoint']
-    ns = np.logspace(exp_start, exp_end, npoint)
 
     #######################################################################
     snf = SNFit(fit_type='stuessi-boerstra')
     rst[snf.fit_type] = snf
     #######################################################################
-    snf.load_data(data, grp_entries)
+    snf.load_data(dff, grp_entries)
     snf.m_start = cfg['m_start']
     snf.Rt_start = cfg['Rt_start']
     snf.Re_start = cfg['Re_start']
     snf.Na_start = cfg['Na_start']
-    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
+    snf.fit_data(cfg['N_fit_upper'])
     snf.touch_basquin_boerstra(cfg['p_touch'])
 
     #######################################################################
     snf = SNFit(fit_type='basquin-goodman')
     rst[snf.fit_type] = snf
     #######################################################################
-    snf.load_data(data, grp_entries)
+    snf.load_data(dff, grp_entries)
     snf.m_start = cfg['m_start']
     snf.Rt_start = cfg['Rt_start']
-    snf.fit_sn(cfg['include_weibull'])
-    snf.project_data(ns)
+    snf.fit_sn()
+    snf.project_data(cfg['N_fit_upper'])
     snf.fit_cld()
 
     #######################################################################
     snf = SNFit(fit_type='basquin-boerstra')
     rst[snf.fit_type] = snf
     #######################################################################
-    snf.load_data(data, grp_entries)
+    snf.load_data(dff, grp_entries)
     snf.m_start = cfg['m_start']
     snf.Rt_start = cfg['Rt_start']
     snf.Na_start = cfg['Na_start']
-    snf.fit_data(ns, cfg['include_weibull'], cfg['alp_idxs'])
+    snf.fit_data(cfg['N_fit_upper'])
 
     return rst
 
@@ -122,8 +102,8 @@ def normalize_fit_paper_data():
     # normalize data
     df = normalize_sn_data(Td_tar=23.0, Tgd_tar=86.1)
     # fit data
-    data, grp_entries, cfg = setup_fit(df)
-    rst = process_fit(data, grp_entries, cfg)
+    dff, grp_entries, cfg = setup_fit(df)
+    rst = process_fit(dff, grp_entries, cfg)
     return rst
 
 
@@ -216,12 +196,12 @@ class SNTestCase(unittest.TestCase):
         self.assertAlmostEqual(
             sa_boerstra(sa0=1.0, sm=0.5, Rt=1.0, alp=1.0) /
             sa_goodman(sa0=1.0, sm=0.5, Rt=1.0),
-            1.0, places=4)
+            1.0, places=3)
 
         self.assertAlmostEqual(
             sa_boerstra(sa0=1.0, sm=0.5, Rt=1.0, alp=2.0) /
             sa_gerber(sa0=1.0, sm=0.5, Rt=1.0),
-            1.0, places=4)
+            1.0, places=3)
 
         Rt = 1.0
         m = 10
@@ -265,7 +245,6 @@ class SNTestCase(unittest.TestCase):
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
-        ax.legend()
         plt.close(fig)
 
     def test_m_basquin(self):
@@ -318,7 +297,7 @@ class SNTestCase(unittest.TestCase):
         dn_dsa_b = dn_dsa_basquin(Na, Ra, Ra, m)
         dn_dsa_s = dn_dsa_stuessi(Ra, m, Rt, Re, Na)
 
-        self.assertAlmostEqual(dn_dsa_b / dn_dsa_s, 1.0, places=4)
+        self.assertAlmostEqual(dn_dsa_b / dn_dsa_s, 1.0, places=3)
 
         # construct two points and test slope functions
         N1 = 100
@@ -341,8 +320,8 @@ class SNTestCase(unittest.TestCase):
         m_calc1 = m_basquin(Rt, sa1, N1)
         m_calc2 = m_basquin_2p(sa1, N1, sa2, N2)
 
-        self.assertAlmostEqual(m_calc1 / m, 1.0, places=4)
-        self.assertAlmostEqual(m_calc2 / m, 1.0, places=4)
+        self.assertAlmostEqual(m_calc1 / m, 1.0, places=3)
+        self.assertAlmostEqual(m_calc2 / m, 1.0, places=3)
 
         fig, ax = plt.subplots()
 
@@ -365,7 +344,6 @@ class SNTestCase(unittest.TestCase):
         ax.loglog([ns[0], ns[int(1E3 * 1 / 3)]],
                   np.r_[Rt, Rt] * 1E-6, ':', color=col)
 
-        ax.legend()
         plt.close(fig)
 
     def test_normalize(self):
@@ -375,9 +353,9 @@ class SNTestCase(unittest.TestCase):
         df.to_csv(os.path.join(self.test_dir, 'df_750.dat'))
 
         dsig_max_exp = -9.829785E6  # Rosemeier and Antoniou 2021, Fig2
-        dsig_max = df['sig_max_tar'] - df['sig_max_cor']
+        dsig_max = df['smax'] - df['sig_max_cor']
 
-        self.assertAlmostEqual(dsig_max[0] / dsig_max_exp, 1.0, places=4)
+        self.assertAlmostEqual(dsig_max[0] / dsig_max_exp, 1.0, places=3)
 
     def test_fit(self):
 
@@ -388,98 +366,98 @@ class SNTestCase(unittest.TestCase):
             if fit_type == 'basquin-goodman':
                 m_fit_exp = 10.36771155004513
                 self.assertAlmostEqual(
-                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=3)
 
                 Rt_fit_exp = 63312517.89557406
                 self.assertAlmostEqual(
-                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=3)
 
                 alpha_exp = -13211256.353476021
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
 
                 beta_exp = 15352705.466147764
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
 
                 gamma_exp = 2.503493845340379
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
 
             # Rosemeier and Antoniou 2021, Fig4c
             elif fit_type == 'basquin-boerstra':
                 m_fit_exp = 11.246422147405845
                 self.assertAlmostEqual(
-                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=3)
 
                 Rt_fit_exp = 69027435.35715565
                 self.assertAlmostEqual(
-                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=3)
 
                 alpha_exp = -3724357.2431028215
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
 
-                beta_exp = 4352004.146272558
+                beta_exp = 4352356.440975934
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
 
-                gamma_exp = 1.6145599959718917
+                gamma_exp = 1.614829583823827
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
 
             # Rosemeier and Antoniou 2021, Fig4e
             elif fit_type == 'stuessi-boerstra':
-                m_fit_exp = 8.045079162278064
+                m_fit_exp = 8.055004655716271
                 self.assertAlmostEqual(
-                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=4)
+                    snf.sn_fit['m_fit'] / m_fit_exp, 1.0, places=3)
 
-                Rt_fit_exp = 71471963.62961282
+                Rt_fit_exp = 71444765.71436065
                 self.assertAlmostEqual(
-                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=4)
+                    snf.sn_fit['Rt_fit'] / Rt_fit_exp, 1.0, places=3)
 
-                Re_fit_exp = 22229821.480521865
+                Re_fit_exp = 22199143.85906476
                 self.assertAlmostEqual(
-                    snf.sn_fit['Re_fit'] / Re_fit_exp, 1.0, places=4)
+                    snf.sn_fit['Re_fit'] / Re_fit_exp, 1.0, places=3)
 
-                Na_exp = 162.51394808464843
+                Na_exp = 162.3937737996702
                 self.assertAlmostEqual(
-                    snf.sn_fit['Na'] / Na_exp, 1.0, places=4)
+                    snf.sn_fit['Na'] / Na_exp, 1.0, places=3)
 
-                alpha_exp = -5630491.841200271
+                alpha_exp = -5584205.47332026
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=4)
+                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
 
-                beta_exp = 6229927.499626992
+                beta_exp = 6185211.1688987035
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=4)
+                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
 
-                gamma_exp = 3.9276920440476264
+                gamma_exp = 3.885322972476399
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=4)
+                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
 
                 # Rosemeier and Antoniou 2021, Fig5c
                 n_test = 1E+5
-                alp_exp = 0.4351147
+                alp_exp = 0.43517844
                 self.assertAlmostEqual(
-                    snf.alp_c(np.log10(n_test)) / alp_exp, 1.0, places=4)
+                    snf.alp_c(np.log10(n_test)) / alp_exp, 1.0, places=3)
 
                 # Rosemeier and Antoniou 2021, Fig5c, Eq.40
-                a_exp = 0.7448715911447118
-                d_exp = 0.120626356404657
-                self.assertAlmostEqual(snf.alpt_c[0] / a_exp, 1.0, places=4)
-                self.assertAlmostEqual(snf.alpt_c[1] / d_exp, 1.0, places=4)
+                a_exp = 0.7442852192598751
+                d_exp = 0.12076292461453189
+                self.assertAlmostEqual(snf.alpt_c[0] / a_exp, 1.0, places=3)
+                self.assertAlmostEqual(snf.alpt_c[1] / d_exp, 1.0, places=3)
 
                 # Rosemeier and Antoniou 2021, Fig5d
-                Rt_p_exp = 68766431.98987138
-                mt_exp = 9.332335514878917
-                Nt_exp = 7252.230208944099
+                Rt_p_exp = 68740726.64559755
+                mt_exp = 9.332540710441792
+                Nt_exp = 7275.341615163826
                 self.assertAlmostEqual(
-                    snf.sn_fit['Rt_p'] / Rt_p_exp, 1.0, places=4)
+                    snf.sn_fit['Rt_p'] / Rt_p_exp, 1.0, places=3)
                 self.assertAlmostEqual(
-                    snf.sn_fit['mt'] / mt_exp, 1.0, places=4)
+                    snf.sn_fit['mt'] / mt_exp, 1.0, places=3)
                 self.assertAlmostEqual(
-                    snf.sn_fit['Nt'] / Nt_exp, 1.0, places=4)
+                    snf.sn_fit['Nt'] / Nt_exp, 1.0, places=3)
 
         # Rosemeier and Antoniou 2021, Fig5d
         fig, ax = plt.subplots()
@@ -500,10 +478,10 @@ class SNTestCase(unittest.TestCase):
                     linestyle = '-'
                     linestyle_bb = ':'
 
-                grps = snf.cyc_data['grplist']
-                cyc_stress_max = snf.cyc_data['cyc_stress_max']
-                cyc_cycles = snf.cyc_data['cyc_cycles']
-                cyc_ratio_grp = snf.cyc_data['cyc_ratio_grp']
+                grps = snf.grps
+                cyc_stress_max = snf.dff['smax']
+                cyc_cycles = snf.dff['N']
+                cyc_ratio_grp = snf.grps_ratio
                 m_fit = snf.sn_fit['m_fit']
                 Rt_fit = snf.sn_fit['Rt_fit']
                 if fit_type == 'stuessi-boerstra':
@@ -615,6 +593,46 @@ class SNTestCase(unittest.TestCase):
 
         plt.close(fig)
 
+    def test_cld_projection(self):
+
+        rst = normalize_fit_paper_data()
+
+        for fit_type, snf in rst.items():
+
+            sm0 = Rt_fit = snf.sn_fit['Rt_fit']
+            npoint = len(snf.alp)
+            nsm = 1000
+            sms = np.linspace(0., sm0, nsm)
+            sas = np.zeros((nsm, npoint))
+
+            for ni in range(npoint):
+                if fit_type == 'basquin-boerstra' or fit_type == 'stuessi-boerstra':
+                    sas[:, ni] = sa_boerstra(
+                        snf.sa0[ni], sms, Rt_fit, snf.alp[ni])
+                elif fit_type == 'basquin-goodman':
+                    sas[:, ni] = sa_goodman(snf.sa0[ni], sms, Rt_fit)
+
+            if fit_type == 'basquin-boerstra':
+                sa_exp = 6895278.734190254
+                self.assertAlmostEqual(
+                    sas[500, 10] / sa_exp, 1.0, places=3)
+            elif fit_type == 'stuessi-boerstra':
+                sa_exp = 6363973.8597395765
+                self.assertAlmostEqual(
+                    sas[500, 10] / sa_exp, 1.0, places=3)
+            elif fit_type == 'basquin-goodman':
+                sa_exp = 10430952.79714319
+                self.assertAlmostEqual(
+                    sas[500, 10] / sa_exp, 1.0, places=3)
+
+            fig, ax = plt.subplots()
+            for ni in range(npoint):
+                col = next(ax._get_lines.prop_cycler)['color']
+                ax.plot(snf.sm_proj[:, ni] * 1E-6,
+                        snf.sa_proj[:, ni] * 1E-6, 'd', color=col)
+                ax.plot(sms * 1E-6, sas[:, ni] * 1E-6, color=col)
+            plt.close(fig)
+
     def test_bbt_touch(self):
 
         rst = normalize_fit_paper_data()
@@ -652,7 +670,7 @@ class SNTestCase(unittest.TestCase):
 
             smax_bbt_sb = smax_bbt[i] / smax_sb[i]
             self.assertAlmostEqual(
-                smax_bbt_sb / smax_bbt_sb_exp[i], 1.0, places=4)
+                smax_bbt_sb / smax_bbt_sb_exp[i], 1.0, places=3)
 
     def test_smax_N(self):
 
@@ -673,8 +691,8 @@ class SNTestCase(unittest.TestCase):
         n_smaxs_test = N_basquin_goodman_weibull(
             smax_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
 
-        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
-        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
 
         # plot both curves against each other
         ns = np.logspace(0, 20, 1000)
@@ -694,7 +712,7 @@ class SNTestCase(unittest.TestCase):
 
         p = 0.05
         smax_exp = 30E6
-        n_exp = 14846.154333689894
+        n_exp = 14843.252368456411
         R = 0.1
         Rt_fit = rst['basquin-boerstra'].sn_fit['Rt_fit']
         m_fit = rst['basquin-boerstra'].sn_fit['m_fit']
@@ -709,8 +727,8 @@ class SNTestCase(unittest.TestCase):
         n_smaxs_test = N_basquin_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
 
-        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
-        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
 
         # plot both curves against each other
         ns = np.logspace(0, 12, 1000)
@@ -727,7 +745,7 @@ class SNTestCase(unittest.TestCase):
         ax.set_xlim([1, 1E12])
 
         p = 0.05
-        smax_exp = 29985020.771579303
+        smax_exp = 29976146.92074468
         n_exp_aki = 7474.234839677993
         n_exp_exp = 7477.76333196836
         R = 0.1
@@ -748,8 +766,8 @@ class SNTestCase(unittest.TestCase):
         n_smaxs_test = N_stuessi_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
-        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
-        self.assertAlmostEqual(n_smaxs_test / n_exp_aki, 1.0, places=4)
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
+        self.assertAlmostEqual(n_smaxs_test / n_exp_aki, 1.0, places=3)
 
         # use exp
         alp_fit = 'exp'
@@ -761,8 +779,8 @@ class SNTestCase(unittest.TestCase):
         n_smaxs_test = N_stuessi_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
-        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
-        self.assertAlmostEqual(n_smaxs_test / n_exp_exp, 1.0, places=4)
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
+        self.assertAlmostEqual(n_smaxs_test / n_exp_exp, 1.0, places=3)
 
         # plot both curves against each other
         ns = np.logspace(0, 10, 1000)
@@ -779,8 +797,8 @@ class SNTestCase(unittest.TestCase):
         ax.semilogx(n_smaxs, smaxs * 1E-6, '-')
         ax.set_xlim([1, 1E20])
 
-        smax_exp = 29984357.408227555
-        n_exp = 2099.240331438329
+        smax_exp = 29999832.205295242
+        n_exp = 2100.321516862882
         R = 0.1
         Rt_p = rst['stuessi-boerstra'].sn_fit['Rt_p']
         mt = rst['stuessi-boerstra'].sn_fit['mt']
@@ -792,8 +810,8 @@ class SNTestCase(unittest.TestCase):
         n_smaxs_test = N_basquin_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
 
-        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=4)
-        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=4)
+        self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
+        self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
 
         # plot both curves against each other
         ns = np.logspace(0, 40, 1000)
@@ -869,12 +887,12 @@ class SNTestCase(unittest.TestCase):
         D_bbt_sum = np.sum(dfl['D_bbt'].to_numpy())
 
         D_bg_sum_exp = 121.38093032386263
-        D_sb_sum_exp = 43.87132234272629
-        D_bbt_sum_exp = 158.88019749923558
+        D_sb_sum_exp = 44.344131595517936
+        D_bbt_sum_exp = 159.1141012877871
 
-        self.assertAlmostEqual(D_bg_sum / D_bg_sum_exp, 1.0, places=4)
-        self.assertAlmostEqual(D_sb_sum / D_sb_sum_exp, 1.0, places=4)
-        self.assertAlmostEqual(D_bbt_sum / D_bbt_sum_exp, 1.0, places=4)
+        self.assertAlmostEqual(D_bg_sum / D_bg_sum_exp, 1.0, places=3)
+        self.assertAlmostEqual(D_sb_sum / D_sb_sum_exp, 1.0, places=3)
+        self.assertAlmostEqual(D_bbt_sum / D_bbt_sum_exp, 1.0, places=3)
 
 
 if __name__ == '__main__':

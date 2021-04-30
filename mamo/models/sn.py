@@ -18,9 +18,7 @@ def explogx(x, a, b, c):
 
 
 def explogx1(x, a, b):
-    ''' Exponential function that goes through point (1,1)
-    c=1-a
-    '''
+    ''' Exponential function that goes through point (1,1) with c=1-a'''
     return a * (x**-b - 1.) + 1.
 
 
@@ -317,7 +315,7 @@ def dn_dsa_basquin(n1, sa1, sa2, m):
     return - m * n1 / sa2 * (sa2 / sa1)**-m
 
 
-def N_basquin(sax, m, N1, sa1):
+def n_basquin(sax, m, N1, sa1):
     '''Cycle number Nx for a given load level sx in according to Basquin
     :param: sax: float target load level
     :param: m: float negative inverse SN curve coefficient at point 1 (stress amplitude)
@@ -361,7 +359,7 @@ def smax_basquin_goodman(n, R, m, Rt, M=1):
     return 2. * Rt / ((1. - R) * n**(1. / m) + M * abs(R + 1.))
 
 
-def N_basquin_goodman(smax, R, m, Rt, M=1):
+def n_basquin_goodman(smax, R, m, Rt, M=1):
     '''Allowable cycles for given max stress of an SN curve according to
     Basquin-Goodman
     :param: smax: float max stress
@@ -414,7 +412,7 @@ def smax_basquin_goodman_weibull(n, R, m, Rt_fit, p, alpha, beta, gamma):
         smax_basquin_goodman(n, R, m, Rt_fit)
 
 
-def N_basquin_goodman_weibull(smax, R, m, Rt_fit, p, alpha, beta, gamma):
+def n_basquin_goodman_weibull(smax, R, m, Rt_fit, p, alpha, beta, gamma):
     '''Cycle number for given max stress and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: smax: float max stress
     :param: R: float stress ratio
@@ -426,7 +424,7 @@ def N_basquin_goodman_weibull(smax, R, m, Rt_fit, p, alpha, beta, gamma):
     :param: gamma: float Weibull parameter
     :param: M: mean stress sensitivity (optional)
     :return: N: float allowable cycle number'''
-    return N_basquin_goodman(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit)
+    return n_basquin_goodman(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit)
 
 
 def Rt_basquin_goodman_weibull(smax, N, R, m, Rt_fit, p, alpha, beta, gamma, M=1):
@@ -486,7 +484,7 @@ def sa_stuessi(n, m, Rt, Re, Na):
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
     :param: Re: float endurance limit for R=-1
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :param: n0: intersection with smax axis
     :return: sa: float allowable stress amplitude
     '''
@@ -501,7 +499,7 @@ def dsa_dn_stuessi(n, m, Rt, Re, Na, n0=1.0):
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
     :param: Re: float endurance limit for R=-1
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :param: n0: intersection with smax axis
     :return: sa: float allowable stress amplitude '''
     b = _b(m, Re, Rt)
@@ -515,20 +513,20 @@ def dn_dsa_stuessi(sa, m, Rt, Re, Na):
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
     :param: Re: float endurance limit for R=-1
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :return: dn/dsa: float cycle number '''
     b = _b(m, Re, Rt)
     return Na * b * (Re - Rt) * ((sa - Rt) / (Re - sa))**(b - 1) / (Re - sa)**2
 
 
-def N_stuessi(sa, m, Rt, Re, Na, n0=1.0):
+def n_stuessi(sa, m, Rt, Re, Na, n0=1.0):
     '''
     Stress amplitude of an SN curve according to Stuessi 1955
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
     :param: Re: float endurance limit for R=-1
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :param: n0: intersection with smax axis
     :return: sa: float allowable stress amplitude
     '''
@@ -555,7 +553,7 @@ def sm_stuessi_boerstra(n, m, Rt,  Re, Na, d):
     return sm
 
 
-def N_sa_sm_stuessi_boerstra(m, Rt, Re, Na, alp, n0=1.0):
+def n_sa_sm_stuessi_boerstra(m, Rt, Re, Na, alp, n0=1.0):
     b = _b(m, Re, Rt)
     n = n0 + Na * (-1. * (sa + Rt * ((sm / Rt)**alp - 1.)) /
                    (sa + Re * ((sm / Rt)**alp - 1.)))**b
@@ -585,7 +583,7 @@ def _rhs_den(smax, Rnum, Re, salp):
     return _rhs_nom(smax, Rnum, Re, salp)
 
 
-def obtain_alp(n, alp_c, alp_fit):
+def getalp(n, alp_c, alp_fit):
     if alp_fit == 'lin':
         alp = poly1dlogx(n, alp_c[0], alp_c[1])
     elif alp_fit == 'exp':
@@ -605,63 +603,15 @@ def obtain_alp(n, alp_c, alp_fit):
     return alp
 
 
-def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp'):
+def _rootwarn_n(n, R):
+    print('Root not found for n=%0.2e, R=%0.2f' % (n, R))
 
-    def getsmax(n_, R_):
-        alp = obtain_alp(n_, alp_c, alp_fit)
 
-        def fun(smax_):
-            Rnum = _Rnum(R_)
-            lhs = _nNa(n_, Na, b)
-            salp = _salp(smax_, Rnum, Rt, alp)
-            rhs_nom = _rhs_nom(smax_, Rnum, Rt, salp)
-            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
-            rhs = -1. * rhs_nom / rhs_den
-            return lhs - rhs
+def _rootwarn_smax(smax, R):
+    print('Root not found for smax=%0.2e, R=%0.2f' % (smax, R))
 
-        def fun_rhs_den(smax_):
-            Rnum = _Rnum(R_)
-            salp = _salp(smax_, Rnum, Rt, alp)
-            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
-            return rhs_den
 
-        def grad(smax_):
-            '''
-            -b ((-0.5^d d (R + 1)^2 s (1/t)^(d - 1) abs((R + 1) s)^(d - 2) - 0.5 (1 - R))/
-            (0.5^d l (1/t)^d abs((R + 1) s)^d - l + 0.5 (1 - R) s) - ((-0.5^d (1/t)^(d - 1) abs((R + 1) s)^d - 0.5 (1 - R) s + t)
-            (0.5^d d l (R + 1)^2 s (1/t)^d abs((R + 1) s)^(d - 2) + 0.5 (1 - R)))/(0.5^d l (1/t)^d abs((R + 1) s)^d - l + 0.5 (1 - R) s)^2)
-             ((-0.5^d (1/t)^(d - 1) abs((R + 1) s)^d - 0.5 (1 - R) s + t)/(0.5^d l (1/t)^d abs((R + 1) s)^d - l + 0.5 (1 - R) s))^(b - 1)
-            '''
-            Rnum = _Rnum(R_)
-
-            Rtalp1 = (1. / Rt)**(alp - 1.)
-            Rtalp = (1. / Rt)**alp
-            Rsalp = abs((Rnum + 1.) * smax_)**alp
-            Rsalp2 = abs((Rnum + 1.) * smax_)**(alp - 2.)
-
-            term1 = (-0.5**alp * alp * (Rnum + 1.)**2 * smax_ * Rtalp1 * Rsalp2 - 0.5 * (1. - Rnum)) /\
-                (0.5**alp * Re * Rtalp * Rsalp - Re + 0.5 * (1. - Rnum) * smax_) -\
-                ((-0.5**alp * Rtalp1 * Rsalp - 0.5 * (1. - Rnum) * smax_ + Rt) *
-                 (0.5**alp * alp * Re * (Rnum + 1.)**2 * smax_ * Rtalp * Rsalp2 + 0.5 * (1. - Rnum))) /\
-                (0.5**alp * Re * Rtalp * Rsalp - Re + 0.5 * (1. - Rnum) * smax_)**2
-            term2 = (-0.5**alp * Rtalp1 * Rsalp - 0.5 * (1. - Rnum) * smax_ + Rt) /\
-                (0.5**alp * Re * Rtalp * Rsalp - Re + 0.5 * (1. - Rnum) * smax_)
-            drhs_dsmax = -b * term1 * term2**(b - 1.)
-            return drhs_dsmax
-
-        if n_ == 1 and R_ >= -1.:
-            smax = Rt
-        else:
-            # find asymptote and use as lower bound
-            # asymptote is found when denominater = zero
-            sasymp = optimize.brentq(f=fun_rhs_den, a=0., b=smax_upper)
-            smax = optimize.brentq(f=fun, a=sasymp + smax_delta, b=smax_upper)
-        return smax
-
-    b = _b(m, Re, Rt)
-
-    smax_upper = Rt
-    smax_delta = 1E-6
+def _getsmax_sca_arr(n, R, _getsmax):
 
     if isinstance(n, np.ndarray) or isinstance(R, np.ndarray):
         if isinstance(n, np.ndarray) and isinstance(R, np.ndarray):
@@ -676,26 +626,34 @@ def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp'):
         smax = np.zeros_like(na)
         for ni, (n_, R_) in enumerate(zip(na, Ra)):
             try:
-                smax[ni] = getsmax(n_, R_)
+                smax[ni] = _getsmax(n_, R_)
             except:
                 smax[ni] = np.nan
-                print('No root found for n_=%0.2e, R=%0.2f' % (n_, R_))
+                _rootwarn_n(n_, R_)
     else:
         try:
-            smax = getsmax(n, R)
+            smax = _getsmax(n, R)
         except:
             smax = np.nan
-            print('No root found for n=%0.2e, R=%0.2f' % (n, R))
-
+            _rootwarn_n(n, R)
     return smax
 
 
-def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12):
+def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp'):
+    ''' Maximum stress for Stuessi-Boerstra model
+    :param: n: permissible cycle number
+    :param: R: stress ratio
+    :param: m: float negative inverse SN curve coefficient at Na for R=-1
+    :param: Rt: float static strength
+    :param: Re: float endurance limit for R=-1
+    :param: Na: float inflection point
+    :param: alp_fit: string alp fit type
+    :param: alp_c: array holding fit coefficients or Akima object
+    :return: smax: float allowable maximum stress '''
+    def _getsmax(n_, R_):
+        alp = getalp(n_, alp_c, alp_fit)
 
-    def getn(smax_, R_):
-
-        def fun(n_):
-            alp = obtain_alp(n_, alp_c, alp_fit)
+        def _fun(smax_):
             Rnum = _Rnum(R_)
             lhs = _nNa(n_, Na, b)
             salp = _salp(smax_, Rnum, Rt, alp)
@@ -704,15 +662,65 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
             rhs = -1. * rhs_nom / rhs_den
             return lhs - rhs
 
-        def fun_rhs_den(n_):
-            alp = obtain_alp(n_, alp_c, alp_fit)
+        def _fun_rhs_den(smax_):
             Rnum = _Rnum(R_)
             salp = _salp(smax_, Rnum, Rt, alp)
             rhs_den = _rhs_den(smax_, Rnum, Re, salp)
             return rhs_den
 
-        def fun_rhs_den_2(n_):
-            alp = obtain_alp(n_, alp_c, alp_fit)
+        if n_ == 1 and R_ >= -1.:
+            smax = Rt
+        else:
+            # find asymptote and use as lower bound
+            # asymptote is found when denominater = zero
+            sasymp = optimize.brentq(f=_fun_rhs_den, a=0., b=smax_upper)
+            smax = optimize.brentq(f=_fun, a=sasymp + smax_delta, b=smax_upper)
+        return smax
+
+    b = _b(m, Re, Rt)
+
+    smax_upper = Rt
+    smax_delta = 1E-6
+
+    smax = _getsmax_sca_arr(n, R, _getsmax)
+
+    return smax
+
+
+def n_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12):
+    ''' Permissible cycle number for Stuessi-Boerstra model
+    :param: smax: float allowable maximum stress
+    :param: R: stress ratio
+    :param: m: float negative inverse SN curve coefficient at Na for R=-1
+    :param: Rt: float static strength
+    :param: Re: float endurance limit for R=-1
+    :param: Na: float inflection point
+    :param: alp_fit: string alp fit type
+    :param: alp_c: array holding fit coefficients or Akima object
+    :param: n_end: cycle number at which endurance limit smax_end is defined, a
+        values below smax_end result in infinite cycle number
+    :return: n: permissible cycle number '''
+    def _getn(smax_, R_):
+
+        def _fun(n_):
+            alp = getalp(n_, alp_c, alp_fit)
+            Rnum = _Rnum(R_)
+            lhs = _nNa(n_, Na, b)
+            salp = _salp(smax_, Rnum, Rt, alp)
+            rhs_nom = _rhs_nom(smax_, Rnum, Rt, salp)
+            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
+            rhs = -1. * rhs_nom / rhs_den
+            return lhs - rhs
+
+        def _fun_rhs_den(n_):
+            alp = getalp(n_, alp_c, alp_fit)
+            Rnum = _Rnum(R_)
+            salp = _salp(smax_, Rnum, Rt, alp)
+            rhs_den = _rhs_den(smax_, Rnum, Re, salp)
+            return rhs_den
+
+        def _fun_rhs_den_2(n_):
+            alp = getalp(n_, alp_c, alp_fit)
             Rnum = _Rnum(R_)
             a_ = smax_ * (Rnum - 1)
             b_ = 2 * Re
@@ -721,7 +729,7 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
             alp_0 = np.log((a_ + b_) / b_) / np.log(c_)
             return alp - alp_0
 
-        def fun_rhs_den_3(smax_):
+        def _fun_rhs_den_3(smax_):
             Rnum = _Rnum(R_)
             f_ = smax_ * (Rnum - 1.)
             g_ = 2. * Re
@@ -736,6 +744,7 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
             D_ = f_ + g_ * (1. - h_**explogx1(nasymp, a_, d_))
             Z_ = f_ + i_ * (1. - h_**explogx1(nasymp, a_, d_))
 
+            # denominater must be zero and nominator's value not
             nom = (nasymp - 1.)**(1 / b) * D_ - Z_ * Na**(1 / b)
             if nom == 0.:
                 nasymp = 0.0
@@ -744,10 +753,10 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
         if alp_fit == 'lin':
             nasymp = None  # not implemented
         elif alp_fit == 'exp':
-            nasymp = fun_rhs_den_3(smax_)
+            nasymp = _fun_rhs_den_3(smax_)
         elif alp_fit == 'aki':
             try:
-                nasymp = optimize.brentq(f=fun_rhs_den, a=0.0, b=1E21)
+                nasymp = optimize.brentq(f=_fun_rhs_den, a=0.0, b=1E21)
             except:
                 nasymp = 0.0
 
@@ -758,7 +767,7 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
             n_delta = 0.
             n_upper = 1E7
 
-        n = optimize.brentq(f=fun, a=nasymp + n_delta, b=n_upper)
+        n = optimize.brentq(f=_fun, a=nasymp + n_delta, b=n_upper)
 
         return n
 
@@ -771,38 +780,44 @@ def N_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
         else:
             Ra = R
         for smaxi, (smax_, R_) in enumerate(zip(smax, Ra)):
-            smax_end = smax_stuessi_boerstra(
+            smax_end = smax_stuessi_boerstra(  # endurance limit
                 n_end, R_, m, Rt, Re, Na, alp_c, alp_fit)
             if smax_ <= smax_end:
                 n[smaxi] = np.inf
             else:
                 try:
-                    n[smaxi] = getn(smax_, R_)
+                    n[smaxi] = _getn(smax_, R_)
                 except:
                     n[smaxi] = np.nan
-                    print('No root found for smax_=%0.2e, R=%0.2f' %
-                          (smax_, R_))
+                    _rootwarn_smax(smax_, R_)
     else:
-        smax_end = smax_stuessi_boerstra(
+        smax_end = smax_stuessi_boerstra(  # endurance limit
             n_end, R, m, Rt, Re, Na, alp_c, alp_fit)
         if smax <= smax_end:
             n = np.inf
         else:
             try:
-                n = getn(smax, R)
+                n = _getn(smax, R)
             except:
                 n = np.nan
-                print('No root found for smax=%0.2e, R=%0.2f' % (smax, R))
+                _rootwarn_smax(smax, R)
 
     return n
 
 
 def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
+    ''' Maximum stress for Basquin-Boerstra model
+    :param: n: permissible cycle number
+    :param: R: stress ratio
+    :param: m: float negative inverse SN curve coefficient at Na for R=-1
+    :param: Rt: float static strength
+    :param: alp_fit: string alp fit type
+    :param: alp_c: array holding fit coefficients or Akima object
+    :return: smax: float allowable maximum stress '''
+    def _getsmax(n_, R_):
+        alp = getalp(n_, alp_c, alp_fit)
 
-    def getsmax(n_, R_):
-        alp = obtain_alp(n_, alp_c, alp_fit)
-
-        def fun(smax_):
+        def _fun(smax_):
             Rnum = _Rnum(R_)
             lhs = n_**(1. / m)
             salp = _salp(smax_, Rnum, Rt, alp)
@@ -813,52 +828,38 @@ def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
             smax = Rt
         else:
             sasymp = 0.
-            smax = optimize.brentq(f=fun, a=sasymp + smax_delta, b=smax_upper)
+            smax = optimize.brentq(f=_fun, a=sasymp + smax_delta, b=smax_upper)
         return smax
 
     smax_upper = Rt
     smax_delta = 1E-6
 
-    if isinstance(n, np.ndarray) or isinstance(R, np.ndarray):
-        if isinstance(n, np.ndarray) and isinstance(R, np.ndarray):
-            na = n
-            Ra = R
-        elif not isinstance(n, np.ndarray) and isinstance(R, np.ndarray):
-            na = np.ones_like(R) * n
-            Ra = R
-        elif isinstance(n, np.ndarray) and not isinstance(R, np.ndarray):
-            na = n
-            Ra = np.ones_like(n) * R
-        smax = np.zeros_like(na)
-        for ni, (n_, R_) in enumerate(zip(na, Ra)):
-            try:
-                smax[ni] = getsmax(n_, R_)
-            except:
-                smax[ni] = np.nan
-                print('No root found for n_=%0.2e, R=%0.2f' % (n_, R_))
-    else:
-        try:
-            smax = getsmax(n, R)
-        except:
-            smax = np.nan
-            print('No root found for n=%0.2e, R=%0.2f' % (n, R))
+    smax = _getsmax_sca_arr(n, R, _getsmax)
 
     return smax
 
 
-def N_basquin_boerstra(smax, R, m, Rt, alp_c, alp_fit='exp', n_upper=1E29):
+def n_basquin_boerstra(smax, R, m, Rt, alp_c, alp_fit='exp', n_upper=1E29):
+    ''' Permissible cycle number for Basquin-Boerstra model
+    :param: smax: float allowable maximum stress
+    :param: R: stress ratio
+    :param: m: float negative inverse SN curve coefficient at Na for R=-1
+    :param: Rt: float static strength
+    :param: alp_fit: string alp fit type
+    :param: alp_c: array holding fit coefficients or Akima object
+    :param: n_upper: float upper limit for root finding
+    :return: n: permissible cycle number '''
+    def _getn(smax_, R_):
 
-    def getn(smax_, R_):
-
-        def fun(n_):
-            alp = obtain_alp(n_, alp_c, alp_fit)
+        def _fun(n_):
+            alp = getalp(n_, alp_c, alp_fit)
             Rnum = _Rnum(R_)
             lhs = n_**(1. / m)
             salp = _salp(smax_, Rnum, Rt, alp)
             rhs = -1. * 2. * Rt * salp / (smax_ * (1. - Rnum))
             return lhs - rhs
         nasymp = 1.
-        n = optimize.brentq(f=fun, a=nasymp, b=n_upper)
+        n = optimize.brentq(f=_fun, a=nasymp, b=n_upper)
         return n
 
     if isinstance(smax, np.ndarray):
@@ -869,16 +870,16 @@ def N_basquin_boerstra(smax, R, m, Rt, alp_c, alp_fit='exp', n_upper=1E29):
             Ra = R
         for smaxi, (smax_, R_) in enumerate(zip(smax, Ra)):
             try:
-                n[smaxi] = getn(smax_, R_)
+                n[smaxi] = _getn(smax_, R_)
             except:
                 n[smaxi] = np.nan
-                print('No root found for smax_=%0.2e, R=%0.2f' % (smax_, R_))
+                _rootwarn_smax(smax_, R_)
     else:
         try:
-            n = getn(smax, R)
+            n = _getn(smax, R)
         except:
             n = np.nan
-            print('No root found for smax=%0.2e, R=%0.2f' % (smax, R))
+            _rootwarn_smax(smax, R)
 
     return n
 
@@ -891,13 +892,12 @@ def xrand_sa_stuessi(sa_i, N_i, m_fit, Rt_fit, Re_fit, Na_fit):
 
 
 def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, alpha, beta, gamma):
-    '''
-    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
+    '''Stress amplitude for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt_fit: float static strength (fit)
     :param: Re_fit: float endurance limit for R=-1 (fit)
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :param: p: float probability
     :param: alpha: float Weibull parameter
     :param: beta: float Weibull parameter
@@ -908,15 +908,13 @@ def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, alpha, beta, gamma):
 
 
 def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma):
-    '''
-    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
+    ''' Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt_fit: float static strength (fit)
-    :param: M: mean stress sensitivity
     :param: Re_fit: float endurance limit for R=-1 (fit)
-    :param: Na: float turning point
+    :param: Na: float inflection point
     :param: p: float probability
     :param: alpha: float Weibull parameter
     :param: beta: float Weibull parameter
@@ -927,8 +925,8 @@ def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p
         smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit)
 
 
-def N_stuessi_boerstra_weibull(smax, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma, n_end=1E12):
-    return N_stuessi_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n_end)
+def n_stuessi_boerstra_weibull(smax, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma, n_end=1E12):
+    return n_stuessi_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n_end)
 
 
 def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
@@ -936,8 +934,8 @@ def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, alpha, bet
         smax_basquin_boerstra(n, R, m, Rt_fit, alp_c, alp_fit)
 
 
-def N_basquin_boerstra_weibull(smax, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
-    return N_basquin_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, alp_c, alp_fit)
+def n_basquin_boerstra_weibull(smax, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
+    return n_basquin_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, alp_c, alp_fit)
 
 
 def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
@@ -949,7 +947,7 @@ def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
     return m_fit * (Re_tar + Rt_tar) / (Re_fit + Rt_fit)
 
 
-def m_touch(n, m, Rt, Re, Na):
+def m_tangent(n, m, Rt, Re, Na):
     ''' 
     sa_basquin == sa_stuessi, solve for mt (Basquin)
     :param: n: float cycle number at which Basqiun should intersect Stuessi 
@@ -1168,24 +1166,21 @@ class SNFit(object):
         self.sn_fit = OrderedDict()
 
         if self.fit_type == 'basquin-goodman':
-            m_fit, Rt_fit, alpha_, beta_, gamma_, xs =\
+            m_fit, Rt_fit, alpha, beta, gamma, xs =\
                 fit_basquin_goodman_weibull(self.dff,
                                             self.m_start,
                                             self.Rt_start)
-            alpha, beta, gamma = alpha_, beta_, gamma_
 
         elif self.fit_type == 'basquin-boerstra':
-            m_fit, Rt_fit, alpha_, beta_, gamma_, xs =\
+            m_fit, Rt_fit, alpha, beta, gamma, xs =\
                 fit_basquin_boerstra_weibull(self.dff,
                                              self.m_start,
                                              self.Rt_start,
                                              self.alp_c,
                                              self.alp_fit)
-            alpha, beta, gamma = alpha_, beta_, gamma_
 
         elif self.fit_type == 'stuessi-boerstra':
-
-            m_fit, Rt_fit, Re_fit, Na, alpha_, beta_, gamma_, xs =\
+            m_fit, Rt_fit, Re_fit, Na, alpha, beta, gamma, xs =\
                 fit_stuessi_boerstra_weibull(self.dff,
                                              self.m_start,
                                              self.Rt_start,
@@ -1194,9 +1189,6 @@ class SNFit(object):
                                              self.alp_c,
                                              self.alp_fit
                                              )
-
-            alpha, beta, gamma = alpha_, beta_, gamma_
-
             self.sn_fit['Re_fit'] = Re_fit
             self.sn_fit['Na'] = Na
 
@@ -1212,9 +1204,7 @@ class SNFit(object):
         cycle numbers and determines respective amplitude and sa and mean sm
         :param: N_fit_upper: upper cycle bound for fitting
         :return: sa_proj: projected stress amplitudes 
-        :return: sm_proj: projected mean stresses
-        '''
-
+        :return: sm_proj: projected mean stresses'''
         self.N_fit_lower = 1
         self.N_fit_upper = N_fit_upper
         self.npoint = npoint = 17
@@ -1301,8 +1291,8 @@ class SNFit(object):
     def fit_alp(self):
         ''' Fits a curve through given Beoerstra exponents over cycles
         Possible fit curves: linear, exponential, Akima spline
-        :param: alp_idxs: '''
-
+        :return: alp_c: array holding fit coefficients or Akima object
+        '''
         # idxs of cycles numbers to be used for alp fitting
         alp_idxs = self.dfns[(self.dfns['ns'] >= self.N_exp_lower) & (
             self.dfns['ns'] <= self.N_fit_upper)].index.to_list()
@@ -1327,10 +1317,9 @@ class SNFit(object):
     def fit_data(self, N_fit_upper, dsig_tol=0.01, maxiter=100):
         ''' Fits SN and CLD until convergence between consecutive loops is
         reached
-        :param: ns: 
-        :param: alp_idxs:
-        :param: dsig_tol:
-        :param: maxiter: '''
+        :param: N_fit_upper: upper cycle bound for fitting
+        :param: dsig_tol: tolerance between consecutive loops
+        :param: maxiter: maximum number of iterations  '''
 
         # start values
         self.alp_fit = 'exp'
@@ -1358,8 +1347,8 @@ class SNFit(object):
                 print('SN/CLD fit converged')
                 break
 
-    def touch_basquin_boerstra(self, p):
-        ''' Find the neg. inv. S/N curve exponent for a Basquin fit that touches
+    def tangent_basquin_boerstra(self, p):
+        ''' Find the neg. inv. S/N curve exponent for a Basquin fit that tangentes
          a p% quantile Stuessi curve
         :param: p: target quantile curve
         '''
@@ -1385,7 +1374,7 @@ class SNFit(object):
 
         def fun(n_):
             # neg inv SN curve exponent at n_ on Stuessi curve
-            mt_ = m_touch(n_, m_p, Rt_p, Re_p, Na)
+            mt_ = m_tangent(n_, m_p, Rt_p, Re_p, Na)
             # gradient of basquin == gadient of stuessi
             lhs = dsa_dn_basquin(n_, mt_, Rt_p)
             rhs = dsa_dn_stuessi(n_, m_p, Rt_p, Re_p, Na)
@@ -1393,12 +1382,12 @@ class SNFit(object):
 
         N_start = Na
         N_end = self.ns[-1]
-        # touch point cycle number
+        # tangent point cycle number
         Nt = optimize.brentq(f=fun, a=N_start, b=N_end)
-        # neg inv sn curve exponent through touch point
-        mt = m_touch(Nt, m_p, Rt_p, Re_p, Na)
+        # neg inv sn curve exponent through tangent point
+        mt = m_tangent(Nt, m_p, Rt_p, Re_p, Na)
 
-        # refit alp for touch curve through 3 points
+        # refit alp for tangent curve through 3 points
         # point 1: (N=1, alp=1)
         # point 2: (Nt, alpt)
         # point 3: (Ne, alpe)

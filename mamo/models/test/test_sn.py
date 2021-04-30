@@ -1,3 +1,9 @@
+'''
+Created on May 1, 2020
+
+@author: Malo Rosemeier
+'''
+
 import os
 import unittest
 import tempfile
@@ -8,12 +14,12 @@ import pickle
 import numpy as np
 import pandas as pd
 from mamo.models.sn import smax_basquin_goodman_weibull, SNFit,\
-    sa_smax, sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
+    sa_goodman, sa_basquin, sa_gerber, sa_loewenthal,\
     sa_swt, sa_tosa, sa_boerstra, smax_stuessi_boerstra_weibull, \
-    smax_basquin_boerstra, smax_basquin_boerstra_weibull, sm_smax, R_ratio,\
-    smax_sa, N_basquin_goodman_weibull, N_basquin_boerstra,\
+    smax_basquin_boerstra, smax_basquin_boerstra_weibull, R_ratio,\
+    smax_sa, n_basquin_goodman_weibull, n_basquin_boerstra,\
     m_basquin_2p, m_basquin, dn_dsa_basquin, dn_dsa_stuessi,\
-    N_basquin_boerstra_weibull, N_stuessi_boerstra_weibull
+    n_basquin_boerstra_weibull, n_stuessi_boerstra_weibull
 from mamo.models.normstren import ttg, Rt_norm_fiedler
 
 
@@ -54,7 +60,7 @@ def setup_fit(dff):
     cfg['Re_start'] = 13.E+6
     cfg['Na_start'] = 325
     cfg['N_fit_upper'] = 1E+8  # upper cycle bound for fitting
-    cfg['p_touch'] = 0.05  # SB quantile to touch BBt
+    cfg['p_tangent'] = 0.05  # SB quantile to tangent BBt
     return dff, grp_entries, cfg
 
 
@@ -72,7 +78,7 @@ def process_fit(dff, grp_entries, cfg):
     snf.Re_start = cfg['Re_start']
     snf.Na_start = cfg['Na_start']
     snf.fit_data(cfg['N_fit_upper'])
-    snf.touch_basquin_boerstra(cfg['p_touch'])
+    snf.tangent_basquin_boerstra(cfg['p_tangent'])
 
     #######################################################################
     snf = SNFit(fit_type='basquin-goodman')
@@ -633,7 +639,7 @@ class SNTestCase(unittest.TestCase):
                 ax.plot(sms * 1E-6, sas[:, ni] * 1E-6, color=col)
             plt.close(fig)
 
-    def test_bbt_touch(self):
+    def test_bbt_tangent(self):
 
         rst = normalize_fit_paper_data()
 
@@ -688,7 +694,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns_test = smax_basquin_goodman_weibull(
             n_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
-        n_smaxs_test = N_basquin_goodman_weibull(
+        n_smaxs_test = n_basquin_goodman_weibull(
             smax_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
@@ -700,7 +706,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns = smax_basquin_goodman_weibull(
             ns, R, m_fit, Rt_fit, p, alpha, beta, gamma)
-        n_smaxs = N_basquin_goodman_weibull(
+        n_smaxs = n_basquin_goodman_weibull(
             smaxs, R, m_fit, Rt_fit, p, alpha, beta, gamma)
 
         _, ax = plt.subplots()
@@ -724,7 +730,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns_test = smax_basquin_boerstra_weibull(
             n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
-        n_smaxs_test = N_basquin_boerstra_weibull(
+        n_smaxs_test = n_basquin_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
@@ -736,7 +742,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns = smax_basquin_boerstra_weibull(
             ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
-        n_smaxs = N_basquin_boerstra_weibull(
+        n_smaxs = n_basquin_boerstra_weibull(
             smaxs, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
 
         _, ax = plt.subplots()
@@ -763,7 +769,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns_test = smax_stuessi_boerstra_weibull(
             n_exp_aki, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
-        n_smaxs_test = N_stuessi_boerstra_weibull(
+        n_smaxs_test = n_stuessi_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
@@ -776,7 +782,7 @@ class SNTestCase(unittest.TestCase):
         smax_ns_test = smax_stuessi_boerstra_weibull(
             n_exp_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
-        n_smaxs_test = N_stuessi_boerstra_weibull(
+        n_smaxs_test = n_stuessi_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
@@ -789,7 +795,7 @@ class SNTestCase(unittest.TestCase):
         #smax_ns = smax_basquin_boerstra_weibull(ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
         smax_ns = smax_stuessi_boerstra_weibull(
             ns, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
-        n_smaxs = N_stuessi_boerstra_weibull(
+        n_smaxs = n_stuessi_boerstra_weibull(
             smaxs, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
 
         _, ax = plt.subplots()
@@ -807,7 +813,7 @@ class SNTestCase(unittest.TestCase):
 
         smax_ns_test = smax_basquin_boerstra_weibull(
             n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
-        n_smaxs_test = N_basquin_boerstra_weibull(
+        n_smaxs_test = n_basquin_boerstra_weibull(
             smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
@@ -818,7 +824,7 @@ class SNTestCase(unittest.TestCase):
         smaxs = np.linspace(0, 80E6, 1000)
 
         smax_ns = smax_basquin_boerstra(ns, R, mt, Rt_p, alp_c, alp_fit)
-        n_smaxs = N_basquin_boerstra(smaxs, R, mt, Rt_p, alp_c, alp_fit)
+        n_smaxs = n_basquin_boerstra(smaxs, R, mt, Rt_p, alp_c, alp_fit)
 
         _, ax = plt.subplots()
         ax.semilogx(ns, smax_ns * 1E-6)
@@ -834,7 +840,7 @@ class SNTestCase(unittest.TestCase):
         dfl = get_markov(self.path_data)
 
         # calculate permissible cycles for a load collective
-        dfl['N_bg'] = N_basquin_goodman_weibull(
+        dfl['N_bg'] = n_basquin_goodman_weibull(
             smax=dfl['smax'].to_numpy(),
             R=dfl['R'].to_numpy(),
             m=rst['basquin-goodman'].sn_fit['m_fit'],
@@ -845,7 +851,7 @@ class SNTestCase(unittest.TestCase):
             gamma=rst['basquin-goodman'].sn_fit['gamma'],
         )
 
-        dfl['N_bbt'] = N_basquin_boerstra(
+        dfl['N_bbt'] = n_basquin_boerstra(
             smax=dfl['smax'].to_numpy(),
             R=dfl['R'].to_numpy(),
             m=rst['stuessi-boerstra'].sn_fit['mt'],
@@ -857,7 +863,7 @@ class SNTestCase(unittest.TestCase):
         print('Number of roots not found (N_bbt):', np.sum(
             np.isnan(dfl['N_bbt'].to_numpy())))
 
-        dfl['N_sb'] = N_stuessi_boerstra_weibull(
+        dfl['N_sb'] = n_stuessi_boerstra_weibull(
             smax=dfl['smax'].to_numpy(),
             R=dfl['R'].to_numpy(),
             m=rst['stuessi-boerstra'].sn_fit['m_fit'],
@@ -870,7 +876,7 @@ class SNTestCase(unittest.TestCase):
             alpha=rst['stuessi-boerstra'].sn_fit['alpha'],
             beta=rst['stuessi-boerstra'].sn_fit['beta'],
             gamma=rst['stuessi-boerstra'].sn_fit['gamma'],
-            n_end=1E14
+            n_end=1E14  # cycle number to determine endurance limit
         )
 
         print('Number of roots not found (N_sb):', np.sum(

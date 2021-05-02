@@ -858,8 +858,8 @@ def n_basquin_boerstra(smax, R, m, Rt, alp_c, alp_fit='exp', n_upper=1E29):
             salp = _salp(smax_, Rnum, Rt, alp)
             rhs = -1. * 2. * Rt * salp / (smax_ * (1. - Rnum))
             return lhs - rhs
-        nasymp = 1.
-        n = optimize.brentq(f=_fun, a=nasymp, b=n_upper)
+        n_lower = 1.
+        n = optimize.brentq(f=_fun, a=n_lower, b=n_upper)
         return n
 
     if isinstance(smax, np.ndarray):

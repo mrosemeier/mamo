@@ -1,5 +1,8 @@
 # MAMO
 
+### Cite as
+[![DOI](https://zenodo.org/badge/363632970.svg)](https://zenodo.org/badge/latestdoi/363632970)
+
 ## Overview
 MAMO is toolbox for MAterial MOdels.
 

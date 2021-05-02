@@ -1,16 +1,12 @@
-MAMO
-======
+#MAMO
 
-# Overview
-
+## Overview
 MAMO is toolbox for MAterial MOdels.
 
-# Dependencies and supported versions
-* compmech
-* PASTA
-* fused-wind
+## Dependencies
+[https://github.com/mrosemeier/conda_envs/tree/mamo_1.0](https://github.com/mrosemeier/conda_envs/tree/mamo_1.0)
 
-# Installation
+## Installation
 Install MAMO in devlopment mode.
 
 ```
@@ -18,14 +14,11 @@ python setup.py develop
 
 ```
 
-# Documentation and Examples
+## Documentation and Examples
+The documentation is not yet available.
+However, examples can be found in ``mamo/test``.
 
-The documentation is still not available.
-However, examples are located in ``pasta/test``.
-
-# Reporting bugs
-
-# Contacts
-If you want more information about the platform, please contact the following authors
+## Contacts
+If you need more information, please contact the following authors
 
 [Malo Rosemeier](mailto:malo.rosemeier@iwes.fraunhofer.de)

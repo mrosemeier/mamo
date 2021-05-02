@@ -1,3 +1,0 @@
-
-class materialFromFile(object):
-    pass

@@ -1,10 +1,10 @@
-# MAMO
+# MAMO toolbox for material models
 
 ### Cite as
 [![DOI](https://zenodo.org/badge/363632970.svg)](https://zenodo.org/badge/latestdoi/363632970)
 
 ## Overview
-MAMO is toolbox for MAterial MOdels.
+MAMO is a toolbox for MAterial MOdels.
 
 ## Papers
 A description of the S-N models can be found in:

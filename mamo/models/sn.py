@@ -54,61 +54,47 @@ def akima1d_extrap_left(alp_c, n):
     return poly1dlogx(n, dalp, b)
 
 
-def p_weibull(x, alpha, beta, gamma):
-    ''' 
-    Obains probability of a given Weibull distribution for a given variable x
-    p = 1. - np.exp(-((x - alpha) / beta)**gamma) for x if beta>0
-    p = np.exp(-((x - alpha) / beta)**gamma) for x if beta<0
-    Note: A negative beta flips the Weibull curve about x-axis
+def p_weibull(x, lmbda, delta, beta):
+    ''' Obains probability of a given Weibull distribution for a given variable x
+    Source: Castillo 2009 A unified statistical methoddology for modelling
+    fatigue damage
+    Note: A negative delta flips the Weibull curve about x-axis
     :param: x: float value probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
-    :return: p: float probability
-    '''
-    if beta < 0:
-        x = np.exp(-((x - alpha) / beta)**gamma)
-    else:
-        x = 1. - np.exp(-((x - alpha) / beta)**gamma)
-    return x
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float Weibull shape parameter
+    :return: p: float failure probability'''
+    return 1. - np.exp(-((x - lmbda) / delta)**beta)
 
 
-def x_weibull(p, alpha, beta, gamma):
+def x_weibull(p, lmbda, delta, beta):
     ''' 
     Obains x value of a Weibull dsitribution for a given probability p
-    (1) solve p = 1. - np.exp(-((x - alpha) / beta)**gamma) for x if beta>0
-    and 
-    (2) solve p = np.exp(-((x - alpha) / beta)**gamma) for x if beta<0
-    Note: A negative beta flips the Weibull curve about x-axis
-    :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
-    :return: x: float value
-    '''
-    if beta < 0:
-        x = alpha + beta * (-np.log(p))**(1. / gamma)
-    else:
-        x = alpha + beta * (-np.log(1. - p))**(1. / gamma)
-    return x
+    solve p = 1. - np.exp(-((x - lmbda) / delta)**beta) for x if delta>0
+    Note: A negative delta flips the Weibull curve about x-axis
+    :param: p: float failure probability
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
+    :return: x: float percentile '''
+    return lmbda + delta * (-np.log(1. - p))**(1. / beta)
 
 
-def s_weibull(alp, bet, gam):
+def s_weibull(lmdba, delta, beta):
     ''' Shifley and Lentz 1985, Quick estimation of the three-parameter Weibull
     to describe tree size distributions
-    :param: alp: float Weibull parameter
-    :param: bet: float Weibull parameter
-    :param: gam: float Weibull parameter
+    :param: lmdba: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float Weibull shape parameter
     :return: mu: float mean
     :return: sig: float standard deviation
     '''
     # mean value
-    mu_alp = bet * gamma(1. + (1. / gam))  # Eq. 2
-    mu = mu_alp + alp  # Eq. 2
-
+    mu_alp = delta * gamma(1. + (1. / beta))  # Eq. 2
+    mu = mu_alp + lmdba  # Eq. 2
     # variance
-    sig2 = bet**2 * (gamma(1. + 2. / gam) - gamma(1. + (1. / gam))**2)  # Eq. 3
-
+    sig2 = delta**2 * (gamma(1. + 2. / beta) -
+                       gamma(1. + (1. / beta))**2)  # Eq. 3
     # standard deviation
     sig = np.sqrt(sig2)
 
@@ -120,9 +106,9 @@ def pwm_weibull(xs):
     Sources: Toasa Caiza and Ummenhofer 2011
     Rinne 2008 The Weibull Distribution, p. 473
     :param: xs: array of unsorted random variables
-    :return: alp: float Weibull parameter
-    :return: bet: float Weibull parameter
-    :return: gam: float Weibull parameter '''
+    :return: lmbda: float Weibull location parameter
+    :return: delta: float Weibull scale parameter
+    :return: beta: float Weibull parameter '''
     n = len(xs)
     # sort xs ascending
     xs_sort = np.sort(xs)
@@ -141,29 +127,30 @@ def pwm_weibull(xs):
             ((n - 1.) * (n - 2.)) * xs_sort[i - 1]
     m2 = 1. / n * sum2  # A2
 
-    def fun(gam_):
+    def fun(beta_):
         # eq. 12.23a/b
         # eq. 16 Toasa Caiza and Ummenhofer 2011
-        lhs = (3.**(-1. / gam_) - 1.) / (2.**(-1. / gam_) - 1.)
+        lhs = (3.**(-1. / beta_) - 1.) / (2.**(-1. / beta_) - 1.)
         rhs = (3. * m2 - m0) / (2. * m1 - m0)
         return lhs - rhs
 
-    def grad(gam_):
+    def grad(beta_):
         # eq. 12.23c
-        return 1. / (gam_**2 * (2.**(-1. / gam_) - 1.)**2) *\
-            (3.**(-1. / gam_) * (2.**(-1. / gam_) - 1.) * np.log(3.) + 2.**(-1. / gam_) *
-             (3.**(-1. / gam_) - 1.) * np.log(2.))
+        return 1. / (beta_**2 * (2.**(-1. / beta_) - 1.)**2) *\
+            (3.**(-1. / beta_) * (2.**(-1. / beta_) - 1.) *
+             np.log(3.) + 2.**(-1. / beta_) *
+             (3.**(-1. / beta_) - 1.) * np.log(2.))
 
-    gam = optimize.brentq(fun, a=1E-12, b=1E2)
+    beta = optimize.brentq(fun, a=1E-12, b=1E2)
 
     # eq. 10 Toasa Caiza and Ummenhofer 2011
-    gamma_gam = gamma(1. + 1. / gam)
+    gamma_ = gamma(1. + 1. / beta)
     # eq. 17 Toasa Caiza and Ummenhofer 2011
-    bet = (2. * m1 - m0) / ((2.**(-1. / gam) - 1) * gamma_gam)
+    delta = (2. * m1 - m0) / ((2.**(-1. / beta) - 1) * gamma_)
     # eq. 18 Toasa Caiza and Ummenhofer 2011
-    alp = m0 - bet * gamma_gam
+    lmbda = m0 - delta * gamma_
 
-    return alp, bet, gam
+    return lmbda, delta, beta
 
 
 def R_ratio(sm, sa):
@@ -395,7 +382,7 @@ def xrand_Rt_basquin_goodman(smax_i, N_i, R_i, m_fit, Rt_fit):
     return Rt_i - Rt_fit
 
 
-def smax_basquin_goodman_weibull(n, R, m, Rt_fit, p, alpha, beta, gamma):
+def smax_basquin_goodman_weibull(n, R, m, Rt_fit, p, lmbda, delta, beta):
     '''
     Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
@@ -404,65 +391,65 @@ def smax_basquin_goodman_weibull(n, R, m, Rt_fit, p, alpha, beta, gamma):
     :param: Rt_fit: float static strength (fit)
     :param: M: mean stress sensitivity
     :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :return: smax: float allowable maximum stress'''
-    return x_weibull(p, alpha, beta, gamma) +\
+    return x_weibull(p, lmbda, delta, beta) +\
         smax_basquin_goodman(n, R, m, Rt_fit)
 
 
-def n_basquin_goodman_weibull(smax, R, m, Rt_fit, p, alpha, beta, gamma):
+def n_basquin_goodman_weibull(smax, R, m, Rt_fit, p, lmbda, delta, beta):
     '''Cycle number for given max stress and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: smax: float max stress
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt_fit: float static strength (fit)
     :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :param: M: mean stress sensitivity (optional)
     :return: N: float allowable cycle number'''
-    return n_basquin_goodman(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit)
+    return n_basquin_goodman(smax - x_weibull(p, lmbda, delta, beta), R, m, Rt_fit)
 
 
-def Rt_basquin_goodman_weibull(smax, N, R, m, Rt_fit, p, alpha, beta, gamma, M=1):
+def Rt_basquin_goodman_weibull(smax, N, R, m, Rt_fit, p, lmbda, delta, beta, M=1):
     '''
     Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: Rt_fit: float static strength (fit)
     :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :return: smax: float allowable maximum stress
     '''
-    x_w = x_weibull(p, alpha, beta, gamma) + Rt_fit
+    x_w = x_weibull(p, lmbda, delta, beta) + Rt_fit
     return 0.5 * (x_w + smax) * ((1. - R) * N**(1. / m) + M * (R + 1.))
 
 
-def smax_limit_basquin_goodman_weibull(p, Rt_fit, alpha, beta, gamma):
+def smax_limit_basquin_goodman_weibull(p, Rt_fit, lmbda, delta, beta):
     '''
     Endurance limit as function of p and R
     :param: p: float probability
     :param: Rt_fit: float static strength (fit)
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :return: Rt: float static strength for arbitrary p
     '''
-    xw_p = x_weibull(p, alpha, beta, gamma)
+    xw_p = x_weibull(p, lmbda, delta, beta)
     Rt = xw_p + Rt_fit
 
     return Rt
 
 
-def xrand_smax_basquin_goodman_weibull(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, p, alpha, beta, gamma):
+def xrand_smax_basquin_goodman_weibull(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, p, lmbda, delta, beta):
     ''' Random variable x using smax
     :return: xrand: float value
     '''
     return smax_i - smax_basquin_goodman_weibull(
-        N_i, R_i, m_fit, Rt_fit, M_fit, p, alpha, beta, gamma)
+        N_i, R_i, m_fit, Rt_fit, M_fit, p, lmbda, delta, beta)
 
 
 def _b(m, Re, Rt):
@@ -891,7 +878,7 @@ def xrand_sa_stuessi(sa_i, N_i, m_fit, Rt_fit, Re_fit, Na_fit):
     return sa_i - sa_stuessi(N_i, m_fit, Rt_fit, Re_fit, Na_fit)
 
 
-def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, alpha, beta, gamma):
+def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, lmbda, delta, beta):
     '''Stress amplitude for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
@@ -899,15 +886,15 @@ def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, alpha, beta, gamma):
     :param: Re_fit: float endurance limit for R=-1 (fit)
     :param: Na: float inflection point
     :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :return: sa: float allowable maximum stress
     '''
-    return x_weibull(p, alpha, beta, gamma) + sa_stuessi(n, m, Rt_fit, Re_fit, Na)
+    return x_weibull(p, lmbda, delta, beta) + sa_stuessi(n, m, Rt_fit, Re_fit, Na)
 
 
-def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma):
+def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, lmbda, delta, beta):
     ''' Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
     :param: n: float cycle number
     :param: R: float stress ratio
@@ -916,26 +903,26 @@ def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p
     :param: Re_fit: float endurance limit for R=-1 (fit)
     :param: Na: float inflection point
     :param: p: float probability
-    :param: alpha: float Weibull parameter
-    :param: beta: float Weibull parameter
-    :param: gamma: float Weibull parameter
+    :param: lmbda: float Weibull location parameter
+    :param: delta: float Weibull scale parameter
+    :param: beta: float  Weibull shape parameter
     :return: smax: float allowable maximum stress
     '''
-    return x_weibull(p, alpha, beta, gamma) +\
+    return x_weibull(p, lmbda, delta, beta) +\
         smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit)
 
 
-def n_stuessi_boerstra_weibull(smax, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, alpha, beta, gamma, n_end=1E12):
-    return n_stuessi_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n_end)
+def n_stuessi_boerstra_weibull(smax, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, lmbda, delta, beta, n_end=1E12):
+    return n_stuessi_boerstra(smax - x_weibull(p, lmbda, delta, beta), R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n_end)
 
 
-def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
-    return x_weibull(p, alpha, beta, gamma) +\
+def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta):
+    return x_weibull(p, lmbda, delta, beta) +\
         smax_basquin_boerstra(n, R, m, Rt_fit, alp_c, alp_fit)
 
 
-def n_basquin_boerstra_weibull(smax, R, m, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma):
-    return n_basquin_boerstra(smax - x_weibull(p, alpha, beta, gamma), R, m, Rt_fit, alp_c, alp_fit)
+def n_basquin_boerstra_weibull(smax, R, m, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta):
+    return n_basquin_boerstra(smax - x_weibull(p, lmbda, delta, beta), R, m, Rt_fit, alp_c, alp_fit)
 
 
 def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
@@ -1005,9 +992,9 @@ def fit_basquin_goodman_weibull(dff, m_start, Rt_start):
                                     R_i=dff['R'],
                                     m_fit=m_fit,
                                     Rt_fit=Rt_fit)
-    alp, bet, gam = pwm_weibull(xs)
+    lmbda, delta, beta = pwm_weibull(xs)
 
-    return m_fit, Rt_fit, alp, bet, gam, xs
+    return m_fit, Rt_fit, lmbda, delta, beta, xs
 
 
 def fit_basquin_boerstra_weibull(dff, m_start, Rt_start, alp_c, alp_fit):
@@ -1019,9 +1006,9 @@ def fit_basquin_boerstra_weibull(dff, m_start, Rt_start, alp_c, alp_fit):
     :param: alp_fit: string
     :return: m_fit
     :return: Rt_fit
-    :return: alpha
-    :return: beta
-    :return: gamma'''
+    :return: lmbda: float Weibull location parameter
+    :return: delta: float Weibull scale parameter
+    :return: beta: float  Weibull shape parameter'''
 
     initial_guess = [m_start, Rt_start]
 
@@ -1051,9 +1038,9 @@ def fit_basquin_boerstra_weibull(dff, m_start, Rt_start, alp_c, alp_fit):
                                      Rt_fit=Rt_fit,
                                      alp_c=alp_c,
                                      alp_fit=alp_fit)
-    alp, bet, gam = pwm_weibull(xs)
+    lmbda, delta, beta = pwm_weibull(xs)
 
-    return m_fit, Rt_fit, alp, bet, gam, xs
+    return m_fit, Rt_fit, lmbda, delta, beta, xs
 
 
 def fit_stuessi_boerstra_weibull(dff, m_start, Rt_start, Re_start, Na_start, alp_c,
@@ -1068,9 +1055,9 @@ def fit_stuessi_boerstra_weibull(dff, m_start, Rt_start, Re_start, Na_start, alp
     :return: Rt_fit
     :return: Re_fit
     :return: Na_fit
-    :return: alp
-    :return: bet
-    :return: gam
+    :return: lmbda: float Weibull location parameter
+    :return: delta: float Weibull scale parameter
+    :return: beta
     '''
     initial_guess = [m_start, Rt_start, Re_start, Na_start]
 
@@ -1107,9 +1094,9 @@ def fit_stuessi_boerstra_weibull(dff, m_start, Rt_start, Re_start, Na_start, alp
                                      Na_fit=Na_fit,
                                      alp_c=alp_c,
                                      alp_fit=alp_fit)
-    alp, bet, gam = pwm_weibull(xs)
+    lmbda, delta, beta = pwm_weibull(xs)
 
-    return m_fit, Rt_fit, Re_fit, Na_fit, alp, bet, gam, xs
+    return m_fit, Rt_fit, Re_fit, Na_fit, lmbda, delta, beta, xs
 
 
 class SNFit(object):
@@ -1166,13 +1153,13 @@ class SNFit(object):
         self.sn_fit = OrderedDict()
 
         if self.fit_type == 'basquin-goodman':
-            m_fit, Rt_fit, alpha, beta, gamma, xs =\
+            m_fit, Rt_fit, lmbda, delta, beta, xs =\
                 fit_basquin_goodman_weibull(self.dff,
                                             self.m_start,
                                             self.Rt_start)
 
         elif self.fit_type == 'basquin-boerstra':
-            m_fit, Rt_fit, alpha, beta, gamma, xs =\
+            m_fit, Rt_fit, lmbda, delta, beta, xs =\
                 fit_basquin_boerstra_weibull(self.dff,
                                              self.m_start,
                                              self.Rt_start,
@@ -1180,7 +1167,7 @@ class SNFit(object):
                                              self.alp_fit)
 
         elif self.fit_type == 'stuessi-boerstra':
-            m_fit, Rt_fit, Re_fit, Na, alpha, beta, gamma, xs =\
+            m_fit, Rt_fit, Re_fit, Na, lmbda, delta, beta, xs =\
                 fit_stuessi_boerstra_weibull(self.dff,
                                              self.m_start,
                                              self.Rt_start,
@@ -1195,9 +1182,9 @@ class SNFit(object):
         self.sn_fit['xs'] = xs.tolist()
         self.sn_fit['m_fit'] = m_fit
         self.sn_fit['Rt_fit'] = Rt_fit
-        self.sn_fit['alpha'] = alpha
+        self.sn_fit['lmbda'] = lmbda
+        self.sn_fit['delta'] = delta
         self.sn_fit['beta'] = beta
-        self.sn_fit['gamma'] = gamma
 
     def project_data(self, N_fit_upper):
         ''' Projects experimental data points along the fit curve on a range of
@@ -1337,9 +1324,9 @@ class SNFit(object):
 
             # standard deviation used as indicator for fit quality
             _, sign = s_weibull(
-                self.sn_fit['alpha'],
-                self.sn_fit['beta'],
-                self.sn_fit['gamma']
+                self.sn_fit['lmbda'],
+                self.sn_fit['delta'],
+                self.sn_fit['beta']
             )
             dsig = 1. - sign / sig
             sig = sign
@@ -1356,9 +1343,9 @@ class SNFit(object):
         Rt_fit = self.sn_fit['Rt_fit']
         Re_fit = self.sn_fit['Re_fit']
         Na = self.sn_fit['Na']
-        alpha = self.sn_fit['alpha']
+        lmbda = self.sn_fit['lmbda']
+        delta = self.sn_fit['delta']
         beta = self.sn_fit['beta']
-        gamma = self.sn_fit['gamma']
 
         # upper cycle number for exponential alp fit
         # use next lower cycle number within experemental cycle range
@@ -1366,7 +1353,7 @@ class SNFit(object):
             self.dfns['ns'][(self.dfns['ns'] <= self.N_exp_upper)].to_numpy())
 
         # determine Re and Rt for given p
-        xw_p = x_weibull(p, alpha, beta, gamma)
+        xw_p = x_weibull(p, lmbda, delta, beta)
         Re_p = xw_p + Re_fit
         Rt_p = xw_p + Rt_fit
         # neg inv SN curve exponent at inflection point

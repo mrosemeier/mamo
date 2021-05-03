@@ -41,7 +41,7 @@ def fit_fiedler(ttg, Rt):
 def Rt_norm_fiedler(ttg_in, ttg_out, Rt_in, m):
     ''' 
     Normalizes linearly static strength to a T/Tg
-    Source: Rosemeier and Antoniou 2021
+    Source: Rosemeier and Antoniou 2021, Eq.1
     :param: ttg_in: float in K/K
     :param: ttg_out: float in K/K
     :param: Rt_in: float in K/K

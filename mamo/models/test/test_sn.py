@@ -280,9 +280,9 @@ class SNTestCase(unittest.TestCase):
             alp_c=[1., 0., 0.],
             alp_fit='exp',
             p=0.50,
-            alpha=-5.6E6,
-            beta=6.2E6,
-            gamma=3.9)
+            lmbda=-5.6E6,
+            delta=6.2E6,
+            beta=3.9)
         smax_s_na = smax_stuessi_boerstra_weibull(
             Na,
             R=-1,
@@ -293,9 +293,9 @@ class SNTestCase(unittest.TestCase):
             alp_c=[1., 0., 0.],
             alp_fit='exp',
             p=0.50,
-            alpha=-5.6E6,
-            beta=6.2E6,
-            gamma=3.9)
+            lmbda=-5.6E6,
+            delta=6.2E6,
+            beta=3.9)
 
         # calculate partial derivate of a Basquin-like linear curve
         # through the inflection point of Stuessi's curve
@@ -380,15 +380,15 @@ class SNTestCase(unittest.TestCase):
 
                 alpha_exp = -13211256.353476021
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
+                    snf.sn_fit['lmbda'] / alpha_exp, 1.0, places=3)
 
                 beta_exp = 15352705.466147764
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
+                    snf.sn_fit['delta'] / beta_exp, 1.0, places=3)
 
                 gamma_exp = 2.503493845340379
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
+                    snf.sn_fit['beta'] / gamma_exp, 1.0, places=3)
 
             # Rosemeier and Antoniou 2021, Fig4c
             elif fit_type == 'basquin-boerstra':
@@ -402,15 +402,15 @@ class SNTestCase(unittest.TestCase):
 
                 alpha_exp = -3724357.2431028215
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
+                    snf.sn_fit['lmbda'] / alpha_exp, 1.0, places=3)
 
                 beta_exp = 4352356.440975934
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
+                    snf.sn_fit['delta'] / beta_exp, 1.0, places=3)
 
                 gamma_exp = 1.614829583823827
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
+                    snf.sn_fit['beta'] / gamma_exp, 1.0, places=3)
 
             # Rosemeier and Antoniou 2021, Fig4e
             elif fit_type == 'stuessi-boerstra':
@@ -432,15 +432,15 @@ class SNTestCase(unittest.TestCase):
 
                 alpha_exp = -5584205.47332026
                 self.assertAlmostEqual(
-                    snf.sn_fit['alpha'] / alpha_exp, 1.0, places=3)
+                    snf.sn_fit['lmbda'] / alpha_exp, 1.0, places=3)
 
                 beta_exp = 6185211.1688987035
                 self.assertAlmostEqual(
-                    snf.sn_fit['beta'] / beta_exp, 1.0, places=3)
+                    snf.sn_fit['delta'] / beta_exp, 1.0, places=3)
 
                 gamma_exp = 3.885322972476399
                 self.assertAlmostEqual(
-                    snf.sn_fit['gamma'] / gamma_exp, 1.0, places=3)
+                    snf.sn_fit['beta'] / gamma_exp, 1.0, places=3)
 
                 # Rosemeier and Antoniou 2021, Fig5c
                 n_test = 1E+5
@@ -499,9 +499,9 @@ class SNTestCase(unittest.TestCase):
                 if not fit_type == 'basquin-goodman':
                     alp_c = snf.alp_c
                     alp_fit = snf.alp_fit
-                alp_smax_fit = snf.sn_fit['alpha']
-                bet_smax_fit = snf.sn_fit['beta']
-                gam_smax_fit = snf.sn_fit['gamma']
+                lmbda_fit = snf.sn_fit['lmbda']
+                delta_fit = snf.sn_fit['delta']
+                beta_fit = snf.sn_fit['beta']
 
                 gidxs = range(len(grps))
 
@@ -511,12 +511,12 @@ class SNTestCase(unittest.TestCase):
                         if fit_type == 'basquin-goodman':
                             smax = smax_basquin_goodman_weibull(
                                 ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
-                                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                                p=p, lmbda=lmbda_fit, delta=delta_fit, beta=beta_fit)
                         elif fit_type == 'stuessi-boerstra':
                             smax = smax_stuessi_boerstra_weibull(
                                 ns, R=cyc_ratio_grp[gidx], m=m_fit, Rt_fit=Rt_fit,
                                 Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
-                                p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                                p=p, lmbda=lmbda_fit, delta=delta_fit, beta=beta_fit)
                         ax.semilogx(ns,
                                     smax * 1E-6,
                                     linestyle=linestyle,
@@ -558,12 +558,12 @@ class SNTestCase(unittest.TestCase):
                 if fit_type == 'basquin-goodman':
                     smax = smax_basquin_goodman_weibull(
                         ns, R=R_, m=m_fit, Rt_fit=Rt_fit,
-                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                        p=p, lmbda=lmbda_fit, delta=delta_fit, beta=beta_fit)
                 elif fit_type == 'stuessi-boerstra':
                     smax = smax_stuessi_boerstra_weibull(
                         ns, R=R_, m=m_fit, Rt_fit=Rt_fit,
                         Re_fit=Re_fit, Na=Na_fit, alp_c=alp_c, alp_fit=alp_fit,
-                        p=p, alpha=alp_smax_fit, beta=bet_smax_fit, gamma=gam_smax_fit)
+                        p=p, lmbda=lmbda_fit, delta=delta_fit, beta=beta_fit)
 
                 ax.semilogx(ns,
                             smax * 1E-6,
@@ -659,9 +659,9 @@ class SNTestCase(unittest.TestCase):
                 m=rst['stuessi-boerstra'].sn_fit['m_fit'],
                 Re_fit=rst['stuessi-boerstra'].sn_fit['Re_fit'],
                 Na=rst['stuessi-boerstra'].sn_fit['Na'],
-                alpha=rst['stuessi-boerstra'].sn_fit['alpha'],
+                lmbda=rst['stuessi-boerstra'].sn_fit['lmbda'],
+                delta=rst['stuessi-boerstra'].sn_fit['delta'],
                 beta=rst['stuessi-boerstra'].sn_fit['beta'],
-                gamma=rst['stuessi-boerstra'].sn_fit['gamma'],
                 alp_c=rst['stuessi-boerstra'].alp_c,
                 alp_fit=rst['stuessi-boerstra'].alp_fit
             )
@@ -688,14 +688,14 @@ class SNTestCase(unittest.TestCase):
         R = 0.1
         Rt_fit = rst['basquin-goodman'].sn_fit['Rt_fit']
         m_fit = rst['basquin-goodman'].sn_fit['m_fit']
-        alpha = rst['basquin-goodman'].sn_fit['alpha']
+        lmbda = rst['basquin-goodman'].sn_fit['lmbda']
+        delta = rst['basquin-goodman'].sn_fit['delta']
         beta = rst['basquin-goodman'].sn_fit['beta']
-        gamma = rst['basquin-goodman'].sn_fit['gamma']
 
         smax_ns_test = smax_basquin_goodman_weibull(
-            n_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+            n_exp, R, m_fit, Rt_fit, p, lmbda, delta, beta)
         n_smaxs_test = n_basquin_goodman_weibull(
-            smax_exp, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+            smax_exp, R, m_fit, Rt_fit, p, lmbda, delta, beta)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
         self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
@@ -705,9 +705,9 @@ class SNTestCase(unittest.TestCase):
         smaxs = np.linspace(0, 80E6, 1000)
 
         smax_ns = smax_basquin_goodman_weibull(
-            ns, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+            ns, R, m_fit, Rt_fit, p, lmbda, delta, beta)
         n_smaxs = n_basquin_goodman_weibull(
-            smaxs, R, m_fit, Rt_fit, p, alpha, beta, gamma)
+            smaxs, R, m_fit, Rt_fit, p, lmbda, delta, beta)
 
         _, ax = plt.subplots()
         ax.semilogx(ns, smax_ns * 1E-6)
@@ -722,16 +722,16 @@ class SNTestCase(unittest.TestCase):
         R = 0.1
         Rt_fit = rst['basquin-boerstra'].sn_fit['Rt_fit']
         m_fit = rst['basquin-boerstra'].sn_fit['m_fit']
-        alpha = rst['basquin-boerstra'].sn_fit['alpha']
+        lmbda = rst['basquin-boerstra'].sn_fit['lmbda']
+        delta = rst['basquin-boerstra'].sn_fit['delta']
         beta = rst['basquin-boerstra'].sn_fit['beta']
-        gamma = rst['basquin-boerstra'].sn_fit['gamma']
         alp_c = rst['basquin-boerstra'].alp_c
         alp_fit = rst['basquin-boerstra'].alp_fit
 
         smax_ns_test = smax_basquin_boerstra_weibull(
-            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
         n_smaxs_test = n_basquin_boerstra_weibull(
-            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
         self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
@@ -741,9 +741,9 @@ class SNTestCase(unittest.TestCase):
         smaxs = np.linspace(0, 80E6, 1000)
 
         smax_ns = smax_basquin_boerstra_weibull(
-            ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
         n_smaxs = n_basquin_boerstra_weibull(
-            smaxs, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            smaxs, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
 
         _, ax = plt.subplots()
         ax.semilogx(ns, smax_ns * 1E-6)
@@ -759,18 +759,18 @@ class SNTestCase(unittest.TestCase):
         m_fit = rst['stuessi-boerstra'].sn_fit['m_fit']
         Re_fit = rst['stuessi-boerstra'].sn_fit['Re_fit']
         Na_fit = rst['stuessi-boerstra'].sn_fit['Na']
-        alpha = rst['stuessi-boerstra'].sn_fit['alpha']
+        lmbda = rst['stuessi-boerstra'].sn_fit['lmbda']
+        delta = rst['stuessi-boerstra'].sn_fit['delta']
         beta = rst['stuessi-boerstra'].sn_fit['beta']
-        gamma = rst['stuessi-boerstra'].sn_fit['gamma']
 
         # use_akima:
         alp_c = rst['stuessi-boerstra'].alp_c
         alp_fit = rst['stuessi-boerstra'].alp_fit
 
         smax_ns_test = smax_stuessi_boerstra_weibull(
-            n_exp_aki, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            n_exp_aki, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
         n_smaxs_test = n_stuessi_boerstra_weibull(
-            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
         self.assertAlmostEqual(n_smaxs_test / n_exp_aki, 1.0, places=3)
@@ -780,10 +780,10 @@ class SNTestCase(unittest.TestCase):
         alp_c = rst['stuessi-boerstra'].alpt_c
 
         smax_ns_test = smax_stuessi_boerstra_weibull(
-            n_exp_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            n_exp_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
 
         n_smaxs_test = n_stuessi_boerstra_weibull(
-            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            smax_exp, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
         self.assertAlmostEqual(n_smaxs_test / n_exp_exp, 1.0, places=3)
@@ -792,11 +792,11 @@ class SNTestCase(unittest.TestCase):
         ns = np.logspace(0, 10, 1000)
         smaxs = np.linspace(15E6, 80E6, 1000)
 
-        #smax_ns = smax_basquin_boerstra_weibull(ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+        #smax_ns = smax_basquin_boerstra_weibull(ns, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
         smax_ns = smax_stuessi_boerstra_weibull(
-            ns, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            ns, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
         n_smaxs = n_stuessi_boerstra_weibull(
-            smaxs, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, alpha, beta, gamma)
+            smaxs, R, m_fit, Rt_fit, Re_fit, alp_c, alp_fit, Na_fit, p, lmbda, delta, beta)
 
         _, ax = plt.subplots()
         ax.semilogx(ns, smax_ns * 1E-6)
@@ -812,9 +812,9 @@ class SNTestCase(unittest.TestCase):
         alp_c = rst['stuessi-boerstra'].alpt_c
 
         smax_ns_test = smax_basquin_boerstra_weibull(
-            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            n_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
         n_smaxs_test = n_basquin_boerstra_weibull(
-            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, alpha, beta, gamma)
+            smax_exp, R, m_fit, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta)
 
         self.assertAlmostEqual(smax_ns_test / smax_exp, 1.0, places=3)
         self.assertAlmostEqual(n_smaxs_test / n_exp, 1.0, places=3)
@@ -846,9 +846,9 @@ class SNTestCase(unittest.TestCase):
             m=rst['basquin-goodman'].sn_fit['m_fit'],
             Rt_fit=rst['basquin-goodman'].sn_fit['Rt_fit'],
             p=0.05,
-            alpha=rst['basquin-goodman'].sn_fit['alpha'],
+            lmbda=rst['basquin-goodman'].sn_fit['lmbda'],
+            delta=rst['basquin-goodman'].sn_fit['delta'],
             beta=rst['basquin-goodman'].sn_fit['beta'],
-            gamma=rst['basquin-goodman'].sn_fit['gamma'],
         )
 
         dfl['N_bbt'] = n_basquin_boerstra(
@@ -873,9 +873,9 @@ class SNTestCase(unittest.TestCase):
             alp_fit='aki',
             Na=rst['stuessi-boerstra'].sn_fit['Na'],
             p=0.05,
-            alpha=rst['stuessi-boerstra'].sn_fit['alpha'],
+            lmbda=rst['stuessi-boerstra'].sn_fit['lmbda'],
+            delta=rst['stuessi-boerstra'].sn_fit['delta'],
             beta=rst['stuessi-boerstra'].sn_fit['beta'],
-            gamma=rst['stuessi-boerstra'].sn_fit['gamma'],
             n_end=1E14  # cycle number to determine endurance limit
         )
 

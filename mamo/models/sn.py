@@ -68,8 +68,7 @@ def p_weibull(x, lmbda, delta, beta):
 
 
 def x_weibull(p, lmbda, delta, beta):
-    ''' 
-    Obains x value of a Weibull dsitribution for a given probability p
+    ''' Obains x value of a Weibull dsitribution for a given probability p
     solve p = 1. - np.exp(-((x - lmbda) / delta)**beta) for x if delta>0
     Note: A negative delta flips the Weibull curve about x-axis
     :param: p: float failure probability
@@ -198,6 +197,7 @@ def smax_sa(sa, R):
 
 def sa_smax(smax, R):
     ''' Stress amplitude as function of max stress and stress ratio
+    Source: Rosemeier and Antoniou 2021, Eq. 10
     :param: smax: float maximum stress
     :param: R: float stress ratio
     :return: sa: float stress amplitude'''
@@ -206,6 +206,7 @@ def sa_smax(smax, R):
 
 def sm_smax(smax, R):
     ''' Stress amplitude as function of max stress and stress ratio
+    Source: Rosemeier and Antoniou 2021, Eq. 11
     :param: smax: float maximum stress
     :param: R: float stress ratio
     :return: sm: float mean stress '''
@@ -274,7 +275,7 @@ def sm_boerstra(sa0, sa, Rt, alp):
 
 
 def sa_basquin(n, m, Rt):
-    ''' Stress amplitude according to Basquin
+    ''' Stress amplitude according to Basquin 1910
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient
     :param: Rt: float static strength
@@ -283,7 +284,8 @@ def sa_basquin(n, m, Rt):
 
 
 def dsa_dn_basquin(n, m, Rt):
-    '''Gradient of stress amplitude of an SN curve according to Basquin
+    '''Gradient of stress amplitude of an SN curve according to Basquin 1910
+    Source: Rosemeier and Antoniou 2021, Eq. 25
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient
     :param: Rt: float static strength
@@ -292,7 +294,8 @@ def dsa_dn_basquin(n, m, Rt):
 
 
 def dn_dsa_basquin(n1, sa1, sa2, m):
-    '''Gradient of cycle number of an SN curve through 2 points according to Basquin
+    '''Gradient of cycle number of an SN curve through 2 points according to
+    Basquin
     :param: sa1: float load level at point 1 (stress amplitude)
     :param: n1: float cycles at point 1
     :param: sa1: float load level at point 2 (stress amplitude)
@@ -349,6 +352,7 @@ def smax_basquin_goodman(n, R, m, Rt, M=1):
 def n_basquin_goodman(smax, R, m, Rt, M=1):
     '''Allowable cycles for given max stress of an SN curve according to
     Basquin-Goodman
+    Source: Rosemeier and Antoniou 2021, Eq. 15
     :param: smax: float max stress
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient
@@ -371,36 +375,28 @@ def Rt_basquin_goodman(smax, N, R, m, M=1):
 
 def xrand_smax_basquin_goodman(smax_i, N_i, R_i, m_fit, Rt_fit):
     ''' Random variable x using smax
+    Source: Rosemeier and Antoniou 2021, Eq. 29
     :return: xrand: float value'''
     return smax_i - smax_basquin_goodman(N_i, R_i, m_fit, Rt_fit)
 
 
 def xrand_Rt_basquin_goodman(smax_i, N_i, R_i, m_fit, Rt_fit):
     ''' Random variable x using smax
+    Source: Rosemeier and Antoniou 2021, Eq. 29
     :return: xrand: float value'''
     Rt_i = Rt_basquin_goodman(smax_i, N_i, R_i, m_fit)
     return Rt_i - Rt_fit
 
 
 def smax_basquin_goodman_weibull(n, R, m, Rt_fit, p, lmbda, delta, beta):
-    '''
-    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
-    :param: n: float cycle number
-    :param: R: float stress ratio
-    :param: m: float negative inverse SN curve coefficient at Na for R=-1
-    :param: Rt_fit: float static strength (fit)
-    :param: M: mean stress sensitivity
-    :param: p: float probability
-    :param: lmbda: float Weibull location parameter
-    :param: delta: float Weibull scale parameter
-    :param: beta: float  Weibull shape parameter
-    :return: smax: float allowable maximum stress'''
+    ''' Source: Rosemeier and Antoniou 2021, Eq. 31'''
     return x_weibull(p, lmbda, delta, beta) +\
         smax_basquin_goodman(n, R, m, Rt_fit)
 
 
 def n_basquin_goodman_weibull(smax, R, m, Rt_fit, p, lmbda, delta, beta):
     '''Cycle number for given max stress and probability of an SN curve according to Stuessi-Goodman-Weibull
+    Source: Rosemeier and Antoniou 2021, Eq. 41
     :param: smax: float max stress
     :param: R: float stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
@@ -415,22 +411,20 @@ def n_basquin_goodman_weibull(smax, R, m, Rt_fit, p, lmbda, delta, beta):
 
 
 def Rt_basquin_goodman_weibull(smax, N, R, m, Rt_fit, p, lmbda, delta, beta, M=1):
-    '''
-    Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
+    ''' Max stress for given cycle number and probability of an SN curve
+    according to Stuessi-Goodman-Weibull
     :param: Rt_fit: float static strength (fit)
     :param: p: float probability
     :param: lmbda: float Weibull location parameter
     :param: delta: float Weibull scale parameter
     :param: beta: float  Weibull shape parameter
-    :return: smax: float allowable maximum stress
-    '''
+    :return: smax: float allowable maximum stress'''
     x_w = x_weibull(p, lmbda, delta, beta) + Rt_fit
     return 0.5 * (x_w + smax) * ((1. - R) * N**(1. / m) + M * (R + 1.))
 
 
 def smax_limit_basquin_goodman_weibull(p, Rt_fit, lmbda, delta, beta):
-    '''
-    Endurance limit as function of p and R
+    ''' Endurance limit as function of p and R
     :param: p: float probability
     :param: Rt_fit: float static strength (fit)
     :param: lmbda: float Weibull location parameter
@@ -446,27 +440,26 @@ def smax_limit_basquin_goodman_weibull(p, Rt_fit, lmbda, delta, beta):
 
 def xrand_smax_basquin_goodman_weibull(smax_i, N_i, R_i, m_fit, Rt_fit, M_fit, p, lmbda, delta, beta):
     ''' Random variable x using smax
-    :return: xrand: float value
-    '''
+    Source: Rosemeier and Antoniou 2021, Eq. 29
+    :return: xrand: float value '''
     return smax_i - smax_basquin_goodman_weibull(
         N_i, R_i, m_fit, Rt_fit, M_fit, p, lmbda, delta, beta)
 
 
 def _b(m, Re, Rt):
-    '''
-    Transforms Basquin's m into Stuessi's b
+    '''Transforms Basquin's m into Stuessi's b
     (1) Derive Basquin for s: dn/ds(s) = -(Na*m*(s/R_a)**(-m))/s
     (2) Derive Stuessi for s: dn/ds(s) = -(Na*b*(Re-Rt)*
                                     ((s-Rt)/(Re-s))**(b-1))/((Re-s)**2)
     (3) Set R_a = 0.5*(Re+Rt)
     (4) Set (1)=(2) with (3) and solve for b
-    '''
+    Source: Rosemeier and Antoniou 2021, Eq.4 and Appendix A'''
     return (m * (-Re + Rt)) / (2. * (Re + Rt))
 
 
 def sa_stuessi(n, m, Rt, Re, Na):
-    '''
-    Stress amplitude of an SN curve according to Stuessi
+    '''Stress amplitude of an SN curve according to Stuessi
+    Source: Rosemeier and Antoniou 2021, Eq.3
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
@@ -482,6 +475,7 @@ def sa_stuessi(n, m, Rt, Re, Na):
 
 def dsa_dn_stuessi(n, m, Rt, Re, Na, n0=1.0):
     ''' Gradient of stress amplitude of an SN curve according to Stuessi
+    Source: Rosemeier and Antoniou 2021, Eq. 24
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
@@ -507,8 +501,7 @@ def dn_dsa_stuessi(sa, m, Rt, Re, Na):
 
 
 def n_stuessi(sa, m, Rt, Re, Na, n0=1.0):
-    '''
-    Stress amplitude of an SN curve according to Stuessi 1955
+    ''' Cycle number of an SN curve according to Stuessi 1955
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
@@ -535,7 +528,6 @@ def sa_stuessi_boerstra(n, m, Rt, Re, Na, alp):
 def sm_stuessi_boerstra(n, m, Rt,  Re, Na, d):
     b = _b(m, Re, Rt)
     nNa = _nNa(n, Na, b)
-    #sm = Rt * ((sa * (n_ - 1.) + Re * n_ + Rt) / (Re * n_ + Rt))**(1. / d)
     sm = Rt * (1. - sa * (nNa - 1.) / (Re * nNa + Rt))**(1. / d)
     return sm
 
@@ -628,6 +620,7 @@ def _getsmax_sca_arr(n, R, _getsmax):
 
 def smax_stuessi_boerstra(n, R, m, Rt, Re, Na, alp_c, alp_fit='exp'):
     ''' Maximum stress for Stuessi-Boerstra model
+    Source: Rosemeier and Antoniou 2021, Eq. 21,22
     :param: n: permissible cycle number
     :param: R: stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
@@ -794,6 +787,7 @@ def n_stuessi_boerstra(smax, R, m, Rt, Re, Na, alp_c, alp_fit='exp', n_end=1E12)
 
 def smax_basquin_boerstra(n, R, m, Rt, alp_c, alp_fit='exp'):
     ''' Maximum stress for Basquin-Boerstra model
+    Source: Rosemeier and Antoniou 2021, Eq. 18
     :param: n: permissible cycle number
     :param: R: stress ratio
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
@@ -873,6 +867,7 @@ def n_basquin_boerstra(smax, R, m, Rt, alp_c, alp_fit='exp', n_upper=1E29):
 
 def xrand_sa_stuessi(sa_i, N_i, m_fit, Rt_fit, Re_fit, Na_fit):
     ''' Random variable x using sa
+    Source: Rosemeier and Antoniou 2021, Eq. 29
     :return: xrand: float value
     '''
     return sa_i - sa_stuessi(N_i, m_fit, Rt_fit, Re_fit, Na_fit)
@@ -895,33 +890,24 @@ def sa_stuessi_weibull(n, m, Rt_fit, Re_fit, Na, p, lmbda, delta, beta):
 
 
 def smax_stuessi_boerstra_weibull(n, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, lmbda, delta, beta):
-    ''' Max stress for given cycle number and probability of an SN curve according to Stuessi-Goodman-Weibull
-    :param: n: float cycle number
-    :param: R: float stress ratio
-    :param: m: float negative inverse SN curve coefficient at Na for R=-1
-    :param: Rt_fit: float static strength (fit)
-    :param: Re_fit: float endurance limit for R=-1 (fit)
-    :param: Na: float inflection point
-    :param: p: float probability
-    :param: lmbda: float Weibull location parameter
-    :param: delta: float Weibull scale parameter
-    :param: beta: float  Weibull shape parameter
-    :return: smax: float allowable maximum stress
-    '''
+    '''Source: Rosemeier and Antoniou 2021, Eq. 31'''
     return x_weibull(p, lmbda, delta, beta) +\
         smax_stuessi_boerstra(n, R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit)
 
 
 def n_stuessi_boerstra_weibull(smax, R, m, Rt_fit, Re_fit, alp_c, alp_fit, Na, p, lmbda, delta, beta, n_end=1E12):
+    '''Source: Rosemeier and Antoniou 2021, Eq. 43'''
     return n_stuessi_boerstra(smax - x_weibull(p, lmbda, delta, beta), R, m, Rt_fit, Re_fit, Na, alp_c, alp_fit, n_end)
 
 
 def smax_basquin_boerstra_weibull(n, R, m, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta):
+    '''Source: Rosemeier and Antoniou 2021, Eq. 31'''
     return x_weibull(p, lmbda, delta, beta) +\
         smax_basquin_boerstra(n, R, m, Rt_fit, alp_c, alp_fit)
 
 
 def n_basquin_boerstra_weibull(smax, R, m, Rt_fit, alp_c, alp_fit, p, lmbda, delta, beta):
+    '''Source: Rosemeier and Antoniou 2021, Eq. 42'''
     return n_basquin_boerstra(smax - x_weibull(p, lmbda, delta, beta), R, m, Rt_fit, alp_c, alp_fit)
 
 
@@ -935,8 +921,8 @@ def m_RtRd(m_fit, Rt_fit, Re_fit, Rt_tar, Re_tar):
 
 
 def m_tangent(n, m, Rt, Re, Na):
-    ''' 
-    sa_basquin == sa_stuessi, solve for mt (Basquin)
+    ''' sa_basquin == sa_stuessi, solve for mt (Basquin)
+    Source: Rosemeier and Antoniou 2021, Eq. 23
     :param: n: float cycle number at which Basqiun should intersect Stuessi 
     :return: mt: float negative inverse SN curve exponent for n
     '''
@@ -945,6 +931,7 @@ def m_tangent(n, m, Rt, Re, Na):
 
 def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit):
     ''' Random variable x using smax
+    Source: Rosemeier and Antoniou 2021, Eq. 29
     :return: xrand: float value
     '''
     return smax_i - smax_stuessi_boerstra(N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit, alp_c, alp_fit)
@@ -952,20 +939,19 @@ def xrand_smax_stuessi_boerstra(smax_i, N_i, R_i, m_fit, Rt_fit, Re_fit, Na_fit,
 
 def xrand_smax_basquin_boerstra(smax_i, N_i, R_i, Rt_fit, m_fit, alp_c, alp_fit):
     ''' Random variable x using smax
+    Source: Rosemeier and Antoniou 2021, Eq. 29
     :return: xrand: float value
     '''
     return smax_i - smax_basquin_boerstra(N_i, R_i, m_fit, Rt_fit, alp_c, alp_fit)
 
 
 def fit_basquin_goodman_weibull(dff, m_start, Rt_start):
-    '''
-    Fits m and Rt to a set of experimental data
+    '''Fits m and Rt to a set of experimental data
     :param: cyc_data: dict with experimental data
     :param: m_start: float start value
     :param: Rt_start: float start value
     :return: m_fit
-    :return: Rt_fit
-    '''
+    :return: Rt_fit'''
 
     initial_guess = [m_start, Rt_start]
 
@@ -1337,6 +1323,7 @@ class SNFit(object):
     def tangent_basquin_boerstra(self, p):
         ''' Find the neg. inv. S/N curve exponent for a Basquin fit that tangentes
          a p% quantile Stuessi curve
+        Source: Rosemeier and Antoniou 2021, Eq. 26
         :param: p: target quantile curve
         '''
         m_fit = self.sn_fit['m_fit']

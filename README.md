@@ -1,34 +1,33 @@
-# MAMO
+[![GitHub Actions Test Badge][1]][3]
+[![GitHub Actions Test Badge][2]][3]
 
-### Cite as
+# MAMO toolbox for material models
+
+## Cite as
 [![DOI](https://zenodo.org/badge/363632970.svg)](https://zenodo.org/badge/latestdoi/363632970)
 
-## Overview
-MAMO is toolbox for MAterial MOdels.
 
 ## Papers
 A description of the S-N models can be found in:
 
 ## Dependencies
-See
-```
-.github/workflows/environment.yml
-
-```
+See [environment.yml](https://github.com/mrosemeier/mamo/environment.yml) or [requirements.txt](https://github.com/mrosemeier/mamo/requirements.txt).
 
 ## Installation
-Install MAMO in devlopment mode.
+Install MAMO in development mode.
 
 ```
 python setup.py develop
-
 ```
 
-## Documentation and Examples
-The documentation is not yet available.
-However, examples can be found in ``mamo/test``.
+## Examples
+Application examples can be found in ``mamo/test``.
 
-## Contacts
+## Contact
 If you need more information, please contact the following authors
 
 [Malo Rosemeier](mailto:malo.rosemeier@iwes.fraunhofer.de)
+
+[1]: https://github.com/mrosemeier/mamo/actions/workflows/python-package.yml/badge.svg "Github Actions Badge"
+[2]: https://github.com/mrosemeier/mamo/actions/workflows/python-package-conda.yml/badge.svg "Github Actions Badge"
+[3]: https://github.com/mrosemeier/mamo/actions "Github Actions"

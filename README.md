@@ -10,7 +10,11 @@ MAMO is a toolbox for MAterial MOdels.
 A description of the S-N models can be found in:
 
 ## Dependencies
-[https://github.com/mrosemeier/conda_envs/tree/mamo_1.0](https://github.com/mrosemeier/conda_envs/tree/mamo_1.0)
+See
+```
+.github/workflows/environment.yml
+
+```
 
 ## Installation
 Install MAMO in devlopment mode.

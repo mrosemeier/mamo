@@ -5,6 +5,7 @@ Created on May 1, 2020
 '''
 
 import os
+import pkg_resources
 import unittest
 import tempfile
 import shutil
@@ -23,6 +24,9 @@ from mamo.models.sn import smax_basquin_goodman_weibull, SNFit,\
 from mamo.models.normstren import ttg, Rt_norm_fiedler
 
 
+PATH = pkg_resources.resource_filename('mamo', os.path.join('models', 'test'))
+
+
 def normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0):
     ''' Normalizes a corrected data set to a target design temperature 
     and a target glass transition temperature
@@ -33,7 +37,7 @@ def normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0):
     path_data = 'data'
 
     # Source: Rosemeier and Antoniou 2021, Tab. 1
-    df = pd.read_csv(os.path.join(path_data, fname), escapechar='#')
+    df = pd.read_csv(os.path.join(PATH, path_data, fname), escapechar='#')
     m = -371.3E6  # Source: Rosemeier and Antoniou 2021, Eq. 1
     dfe = df[df['runout'] == 0].reset_index()  # exclude runouts
     # normalize strengths to ttg_tar
@@ -152,7 +156,7 @@ def get_markov(path_data):
     np.sum(weight)
 
     fname = 'markov_dp0'
-    with open(os.path.join(path_data, fname + '.pkl'), 'rb') as myrestoredata:
+    with open(os.path.join(PATH, path_data, fname + '.pkl'), 'rb') as myrestoredata:
         m = pickle.load(myrestoredata)
     # [vwind, z, ('triax', 45)]
 
@@ -356,7 +360,7 @@ class SNTestCase(unittest.TestCase):
 
         # normalize data
         df = normalize_sn_data(Td_tar=23.0, Tgd_tar=75.0)
-        df.to_csv(os.path.join(self.test_dir, 'df_750.dat'))
+        df.to_csv(os.path.join(PATH, self.test_dir, 'df_750.dat'))
 
         dsig_max_exp = -9.829785E6  # Rosemeier and Antoniou 2021, Fig2
         dsig_max = df['smax'] - df['sig_max_cor']

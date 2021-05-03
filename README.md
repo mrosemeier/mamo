@@ -21,7 +21,7 @@ python setup.py develop
 ```
 
 ## Examples
-Application examples can be found in ``mamo/test``.
+Application examples can be found [here](https://github.com/mrosemeier/mamo/tree/public/mamo/models/test).
 
 ## Contact
 If you need more information, please contact the following authors

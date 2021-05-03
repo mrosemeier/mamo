@@ -11,7 +11,7 @@
 A description of the S-N models can be found in:
 
 ## Dependencies
-See [environment.yml](https://github.com/mrosemeier/mamo/environment.yml) or [requirements.txt](https://github.com/mrosemeier/mamo/requirements.txt).
+See [environment.yml](https://github.com/mrosemeier/mamo/blob/public/environment.yml) or [requirements.txt](https://github.com/mrosemeier/mamo/blob/public/requirements.txt).
 
 ## Installation
 Install MAMO in development mode.

@@ -20,9 +20,7 @@ from mamo.models.sn import smax_basquin_goodman_weibull, SNFit,\
     smax_basquin_boerstra, smax_basquin_boerstra_weibull, R_ratio,\
     smax_sa, n_basquin_goodman_weibull, n_basquin_boerstra,\
     m_basquin_2p, m_basquin, dn_dsa_basquin, dn_dsa_stuessi,\
-    n_basquin_boerstra_weibull, n_stuessi_boerstra_weibull, sa_stuessi, _b,\
-    c_stuessi_orig, Na_stuessi_orig, sa_stuessi_orig_semilogx,\
-    dsa_di_stuessi_orig_semilogx, d2sa_di2_stuessi_orig_semilogx, dsa_dn_stuessi
+    n_basquin_boerstra_weibull, n_stuessi_boerstra_weibull
 from mamo.models.normstren import ttg, Rt_norm_fiedler
 
 
@@ -257,60 +255,6 @@ class SNTestCase(unittest.TestCase):
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
-        plt.close(fig)
-
-    def test_stuessi_orig_alt(self):
-
-        exp_start = 0  # 10^0
-        exp_end = 8  # 10^8
-        ns = np.logspace(exp_start, exp_end, 1000)
-        i = np.linspace(exp_start, exp_end, 1000)
-
-        Na = 1E4
-        Rt = 71.5E6
-        Re = 22.3E6
-        m = 10
-
-        b = _b(m, Re, Rt)
-        p = 1. / b
-
-        c = c_stuessi_orig(Na, p)
-        Na_calc = Na_stuessi_orig(c, p)
-
-        self.assertAlmostEqual(Na_calc / Na, 1.0, places=3)
-
-        sao = sa_stuessi_orig_semilogx(i, Rt, Re, c, p)
-        dsao_dn = dsa_di_stuessi_orig_semilogx(i, Rt, Re, c, p)
-        dsao_d2n = d2sa_di2_stuessi_orig_semilogx(i, Rt, Re, c, p)
-
-        saa = sa_stuessi(ns, m, Rt, Re, Na, n0=0)
-        dsaa_dn = dsa_dn_stuessi(ns, m, Rt, Re, Na, n0=0)
-
-        sao_na = sa_stuessi_orig_semilogx(np.log10(Na), Rt, Re, c, p)
-        saa_na = sa_stuessi(Na, m, Rt, Re, Na, n0=0)
-
-        self.assertAlmostEqual(saa_na / sao_na, 1.0, places=3)
-
-        fig, ax = plt.subplots()
-
-        col = next(ax._get_lines.prop_cycler)['color']
-        ax.plot(i, sao * 1E-6, linestyle='-',
-                label=r'Stussi (orig)', color=col)
-        ax.plot(i, dsao_dn * 1E-6, linestyle='--',
-                label=r'Stussi 1st deriv. (orig)', color=col)
-        ax.plot(i, dsao_d2n * 1E-6, linestyle='-.',
-                label=r'Stussi 2nd deriv. (orig)', color=col)
-        ax.plot(np.log10(Na),  sao_na * 1E-6, 'x', color=col)
-
-        col = next(ax._get_lines.prop_cycler)['color']
-        ax.plot(np.log10(ns), saa * 1E-6, linestyle='--',
-                label=r'Stussi (alt)', color=col)
-        ax.plot(np.log10(ns), dsaa_dn * 1E-6, linestyle=':',
-                label=r'Stussi 1st deriv. (alt)', color=col)
-
-        ax.plot(np.log10(Na),  saa_na * 1E-6, '+', color=col)
-
-        ax.legend()
         plt.close(fig)
 
     def test_m_basquin(self):

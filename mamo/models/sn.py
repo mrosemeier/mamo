@@ -453,13 +453,13 @@ def _b(m, Re, Rt):
                                     ((s-Rt)/(Re-s))**(b-1))/((Re-s)**2)
     (3) Set R_a = 0.5*(Re+Rt)
     (4) Set (1)=(2) with (3) and solve for b
-    Source: Rosemeier and Antoniou 2021, Eq.4 and Appendix B'''
+    Source: Rosemeier and Antoniou 2021, Eq.4 and Appendix A'''
     return (m * (-Re + Rt)) / (2. * (Re + Rt))
 
 
-def sa_stuessi(n, m, Rt, Re, Na, n0=1.0):
+def sa_stuessi(n, m, Rt, Re, Na):
     '''Stress amplitude of an SN curve according to Stuessi
-    Source: Rosemeier and Antoniou 2021, Eq.3 and Appendix A
+    Source: Rosemeier and Antoniou 2021, Eq.3
     :param: n: float cycle number
     :param: m: float negative inverse SN curve coefficient at Na for R=-1
     :param: Rt: float static strength
@@ -469,7 +469,7 @@ def sa_stuessi(n, m, Rt, Re, Na, n0=1.0):
     :return: sa: float allowable stress amplitude
     '''
     b = _b(m, Re, Rt)
-    nNa = _nNa(n, Na, b, n0)
+    nNa = _nNa(n, Na, b)
     return (Re * nNa + Rt) / (1. + nNa)
 
 
@@ -512,120 +512,6 @@ def n_stuessi(sa, m, Rt, Re, Na, n0=1.0):
     '''
     b = _b(m, Re, Rt)
     return n0 + Na * ((Rt - sa) / (sa - Re))**b
-
-
-def sa_stuessi_orig(n, Rt, Re, c, p):
-    ''' Stuessi's original formulation as of 1955, Eq.13
-    Source: Rosemeier and Antoniou 2021, Eq.46
-    :param: n: float cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: sa: float allowable stress amplitude
-    '''
-    return (Rt + c * n**p * Re) / (1 + c * n**p)
-
-
-def dsa_dn_stuessi_orig(n, Rt, Re, c, p):
-    ''' First derivative of sa_stuessi_orig
-    :param: n: float cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: dsa/dn: float first derivative of allowable stress amplitude
-    '''
-    return (c * p * (Re - Rt) * n**(p - 1.)) / (c * n**p + 1.)**2
-
-
-def d2sa_dn2_stuessi_orig(n, Rt, Re, c, p):
-    ''' Second derivative of sa_stuessi_orig
-    Source: Rosemeier and Antoniou 2021, Eq.49
-    :param: n: float cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: d**2sa/dn**2: float second derivative of allowable stress amplitude
-    '''
-    return -(c * n**(p - 2.) * p * (1. + c * n**p - p + c * n**p * p) *
-             (Re - Rt)) / (1. + c * n**p)**3
-
-
-def sa_stuessi_orig_semilogx(i, Rt, Re, c, p):
-    ''' Combine sa_stuessi_orig with n=10**i
-    Source: Rosemeier and Antoniou 2021, Eq.48
-    :param: i: float exponente of cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: sa: float allowable stress amplitude
-    '''
-    return (Rt + c * 10**(i * p) * Re) / (1 + c * 10**(i * p))
-
-
-def dsa_di_stuessi_orig_semilogx(i, Rt, Re, c, p):
-    ''' First derivative of sa_stuessi_orig_semilogx
-    :param: i: float exponente of cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: dsa/di: float first derivative of allowable stress amplitude
-    '''
-    return (c * p * 10**(i * p) * (Re - Rt) * np.log(10)) /\
-        (1. + c * 10**(i * p))**2
-
-
-def d2sa_di2_stuessi_orig_semilogx(i, Rt, Re, c, p):
-    ''' Second derivative of sa_stuessi_orig_semilogx
-    Source: Rosemeier and Antoniou 2021, Eq.49
-    :param: i: float exponente of cycle number
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: d**2sa/di**2: float second derivative of allowable stress amplitude
-    '''
-    return ((1. - c * 10**(i * p)) * c * p**2 * 10**(i * p) *
-            (Re - Rt) * np.log(10)**2) / (1. + c * 10**(i * p))**3
-
-
-def Na_stuessi_orig(c, p):
-    ''' Inflection point x coordinate of stuessi_orig
-    (1) set d2sa_dn2_stuessi_orig_semilogx=0 to find inflection point ia
-    (2) solve for ia => ia = log(1/c)/(p*log(10))
-    (3) combine with Na=10**ia
-    Source: Rosemeier and Antoniou 2021, Eq.50
-    :param: c: float geometric parameter
-    :param: p: float geometric parameter
-    :return: Na: float allowable cycle number at inflection point
-    '''
-    return (1. / c)**(1. / p)
-
-
-def c_stuessi_orig(Na, p):
-    '''Convert Na into original Stuessi's geometric parameter c
-    Source: Rosemeier and Antoniou 2021, Eq.52
-    :param: p: float geometric parameter
-    :param: Na: float allowable cycle number at inflection point
-    :return: c: float geometric parameter
-    '''
-    return (1. / Na)**p
-
-
-def Ra_stuessi_orig(Rt, Re):
-    ''' Inflection point y coordinate of stuessi_orig
-    (1) insert ia = log(1/c)/(p*log(10)) into sa_stuessi_orig_semilogx
-    (2) solve for sa
-    Source: Rosemeier and Antoniou 2021, Eq.51
-    :param: Rt: float static strength
-    :param: Re: float endurance limit for R=-1
-    :return: Ra: float allowable stress amplitude at inflection point
-    '''
-    return 0.5 * (Re + Rt)
 
 
 def _nNa(n, Na, b, n0=1):

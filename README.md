@@ -4,11 +4,11 @@
 # MAMO toolbox for material models
 
 ## Cite as
+If you use this model in your research or publications, please cite this journal article which contains a detailed description of the S-N models: https://doi.org/10.2514/1.J060444
+
+The code can be referenced as:
 [![DOI](https://zenodo.org/badge/363632970.svg)](https://zenodo.org/badge/latestdoi/363632970)
 
-
-## Papers
-A description of the S-N models can be found in:
 
 ## Dependencies
 See [environment.yml](https://github.com/mrosemeier/mamo/blob/public/environment.yml) or [requirements.txt](https://github.com/mrosemeier/mamo/blob/public/requirements.txt).

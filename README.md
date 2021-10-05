@@ -6,8 +6,26 @@
 ## Cite as
 If you use this model in your research or publications, please cite this journal article which contains a detailed description of the S-N models: https://doi.org/10.2514/1.J060444
 
-The code can be referenced as:
+	@article{rosemeier2021probabilistic,
+	author = {Rosemeier, Malo and Antoniou, Alexandros},
+	title = {Probabilistic Approach for the Fatigue Strength Prediction of Polymers},
+	journal = {AIAA Journal},
+	OPTvolume = {0},
+	OPTnumber = {0},
+	OPTpages = {1-11},
+	year = {2021},
+	doi = {10.2514/1.J060444},
+	URL = {https://doi.org/10.2514/1.J060444},
+	}
+
+The code in v0.1 used in the journal article can be referenced as:
+
 [![DOI](https://zenodo.org/badge/363632970.svg)](https://zenodo.org/badge/latestdoi/363632970)
+
+
+The genral code in its latest version can be referenced as:
+
+https://doi.org/10.5281/zenodo.4732972
 
 
 ## Dependencies
